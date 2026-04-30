@@ -161,7 +161,28 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
     <!-- 預約頁 -->
     <div id="pg-book" class="bwrap">
 
+      <!-- 先選人數 -->
       <div class="sec">
+        <div class="lbl">預約人數</div>
+        <div style="display:flex;gap:8px">
+          <div class="mc" id="cnt-1" onclick="pickCount(1)" style="min-width:60px;flex:1">
+            <div class="mc-nm">1人</div>
+          </div>
+          <div class="mc" id="cnt-2" onclick="pickCount(2)" style="min-width:60px;flex:1">
+            <div class="mc-nm">2人</div>
+          </div>
+          <div class="mc" id="cnt-3" onclick="pickCount(3)" style="min-width:60px;flex:1">
+            <div class="mc-nm">3人</div>
+          </div>
+          <div class="mc" id="cnt-4" onclick="pickCount(4)" style="min-width:60px;flex:1">
+            <div class="mc-nm">4人</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1人：選師傅 -->
+      <div class="sec" id="sec-master-1" style="display:none">
+        <div class="arrow">↓</div>
         <div class="lbl">選擇師傅</div>
         <div class="mrow">
           <div class="mc" id="mc-auto" onclick="pickM('auto')">
@@ -183,6 +204,48 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
           <div class="mc" id="mc-zhi" onclick="pickM('zhi')">
             <div class="mc-nm">魏老師</div>
             <span class="mc-tag t-req">需申請</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 多人：選模式 -->
+      <div class="sec" id="sec-master-multi" style="display:none">
+        <div class="arrow">↓</div>
+        <div class="lbl">預約方式</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="mc" id="mode-same" onclick="pickMode('same')" style="flex-direction:row;align-items:center;gap:10px;min-width:unset;padding:14px">
+            <div style="font-size:22px">👤</div>
+            <div style="text-align:left">
+              <div class="mc-nm" style="font-size:14px">同一師傅，連續時段</div>
+              <div style="font-size:11px;color:var(--t2);margin-top:2px">例：14:00 + 14:30，同一位老師做兩人</div>
+            </div>
+          </div>
+          <div class="mc" id="mode-split" onclick="pickMode('split')" style="flex-direction:row;align-items:center;gap:10px;min-width:unset;padding:14px">
+            <div style="font-size:22px">👥</div>
+            <div style="text-align:left">
+              <div class="mc-nm" style="font-size:14px">拆兩位師傅，同時段</div>
+              <div style="font-size:11px;color:var(--t2);margin-top:2px">哲瑋老師 + 泓文老師，同時間各做一人</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 同師傅模式：選師傅 -->
+      <div class="sec" id="sec-master-same" style="display:none">
+        <div class="arrow">↓</div>
+        <div class="lbl">選擇師傅</div>
+        <div class="mrow">
+          <div class="mc" id="mc-auto-m" onclick="pickM('auto')">
+            <div class="mc-nm">不指定</div>
+            <span class="mc-tag t-auto">自動分配</span>
+          </div>
+          <div class="mc" id="mc-zhiwei-m" onclick="pickM('zhiwei')">
+            <div class="mc-nm">哲瑋老師</div>
+            <span class="mc-tag t-open">立即預約</span>
+          </div>
+          <div class="mc" id="mc-hongwen-m" onclick="pickM('hongwen')">
+            <div class="mc-nm">泓文老師</div>
+            <span class="mc-tag t-open">立即預約</span>
           </div>
         </div>
       </div>
@@ -248,15 +311,10 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
     <input class="fi" id="f-phone" placeholder="09xxxxxxxx" type="tel" inputmode="numeric" />
   </div>
 
-  <!-- 預約人數 -->
-  <div class="fg">
+  <!-- 人數已在前面選好，這裡顯示確認 -->
+  <div class="fg" id="fg-count-confirm" style="display:none">
     <label class="fl">預約人數</label>
-    <div class="chips" id="chips-count">
-      <button class="chip" onclick="pickChip('count','1人')">1人</button>
-      <button class="chip" onclick="pickChip('count','2人')">2人</button>
-      <button class="chip" onclick="pickChip('count','3人')">3人</button>
-      <button class="chip" onclick="pickChip('count','4人')">4人</button>
-    </div>
+    <div id="count-confirm-text" style="font-size:16px;font-weight:700;color:var(--cyan);padding:8px 0"></div>
   </div>
 
   <!-- 有無開過刀 -->
@@ -350,6 +408,8 @@ const TIMES = [...new Set(ALL_TIMES)].sort();
 
 let profile = null;
 let selM = null, selD = null, selT = null;
+let selCount = 1;
+let selMode = 'single'; // 'single', 'same', 'split'
 let chipVals = {};
 let slotCache = {}; // date+masterKey -> booked set
 let selectedDays = new Set();
@@ -418,11 +478,65 @@ function goPage(p){
     document.getElementById('n-'+x).classList.toggle('on',x===p);
   });
   if(p==='my') loadMyBookings();
-  if(p==='book') document.getElementById('ctawrap').style.display = (selM&&selD&&selT)?'block':'none';
+  if(p==='book') document.getElementById('ctawrap').style.display = ((selM||selMode==='split')&&selD&&selT)?'block':'none';
   else document.getElementById('ctawrap').style.display='none';
 }
 
 // ── Master pick ───────────────────────
+function pickCount(n){
+  selCount = n;
+  selM = null; selD = null; selT = null;
+  // Reset chips
+  document.querySelectorAll('[id^="cnt-"]').forEach(el=>el.classList.remove('on','on-g'));
+  document.getElementById('cnt-'+n).classList.add('on');
+  // Reset master chips
+  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
+  // Hide all sections
+  document.getElementById('sec-master-1').style.display='none';
+  document.getElementById('sec-master-multi').style.display='none';
+  document.getElementById('sec-master-same').style.display='none';
+  document.getElementById('sec-date').style.display='none';
+  document.getElementById('sec-time').style.display='none';
+  document.getElementById('ctawrap').style.display='none';
+
+  if(n === 1){
+    document.getElementById('sec-master-1').style.display='block';
+    selMode='single';
+  } else {
+    document.getElementById('sec-master-multi').style.display='block';
+    selMode='';
+  }
+  setTimeout(()=>document.getElementById(n===1?'sec-master-1':'sec-master-multi').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+}
+
+function pickMode(mode){
+  selMode = mode;
+  selM = null; selD = null; selT = null;
+  document.querySelectorAll('[id^="mode-"]').forEach(el=>el.classList.remove('on','on-g'));
+  document.getElementById('mode-'+mode).classList.add('on');
+  document.getElementById('sec-master-same').style.display='none';
+  document.getElementById('sec-date').style.display='none';
+  document.getElementById('sec-time').style.display='none';
+  document.getElementById('ctawrap').style.display='none';
+
+  if(mode === 'same'){
+    document.getElementById('sec-master-same').style.display='block';
+    setTimeout(()=>document.getElementById('sec-master-same').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+  } else if(mode === 'split'){
+    // Split mode: no master to select, go straight to date
+    selM = 'split';
+    document.getElementById('sec-date').style.display='block';
+    buildDates();
+    // Pre-fetch
+    const today=new Date();
+    for(let i=0;i<7;i++){
+      const d=new Date(today);d.setDate(d.getDate()+i);
+      prefetch(d.toISOString().slice(0,10));
+    }
+    setTimeout(()=>document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+  }
+}
+
 function pickM(key){
   selM=key; selD=null; selT=null;
   document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
@@ -534,6 +648,7 @@ function renderSlots(){
 }
 
 function getMasterIds(){
+  if(selM==='split') return [MASTERS.zhiwei.id,MASTERS.hongwen.id];
   if(selM==='auto'||!selM) return [MASTERS.zhiwei.id,MASTERS.hongwen.id];
   if(MASTERS[selM]?.id) return [MASTERS[selM].id];
   return [];
@@ -543,18 +658,25 @@ function getMasterIds(){
 function pickTime(t){
   selT=t;
   document.querySelectorAll('.ts').forEach(el=>el.classList.toggle('on',el.dataset.time===t));
-  document.getElementById('ctawrap').style.display='block';
+  const canShowCTA = (selM||selMode==='split')&&selD&&selT;
+  document.getElementById('ctawrap').style.display=canShowCTA?'block':'none';
+  // Update CTA text
+  if(selMode==='split') document.getElementById('ctabtn').textContent='選好了，填資料 →';
+  else if(selMode==='same'&&selCount>1){
+    const slots=[];for(let s=0;s<selCount;s++){const nt=getNextTimeStr(t,s);if(nt)slots.push(nt);}
+    document.getElementById('ctabtn').textContent=`${slots.join('+')} 共${slots.length}格 →`;
+  }
   setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),80);
 }
 
 // ── Open form ─────────────────────────
 function openForm(){
   const isReqCheck=MASTERS[selM]?.type==='request';
-  if(!selM){toast('請選擇師傅','err');return;}
+  if(!selM&&selMode!=='split'){toast('請選擇師傅','err');return;}
   if(!isReqCheck&&(!selD||!selT)){toast('請選擇日期和時段','err');return;}
-  const m=MASTERS[selM];
+  const m=MASTERS[selM]||{};
   const isReq=m?.type==='request';
-  const mname=isReq?m.name:(selM==='auto'?'不指定':m.name);
+  const mname=selM==='split'?'哲瑋老師 + 泓文老師':(isReq?m.name:(selM==='auto'?'不指定':m.name));
 
   // Title
   document.getElementById('sh-title').textContent=isReq?`申請預約 - ${mname}`:'填寫預約資料';
@@ -585,6 +707,16 @@ function openForm(){
   if(document.getElementById('f-weekend')) document.getElementById('f-weekend').value='';
   document.getElementById('f-note').value='';
 
+  // Show count confirm
+  const cconfirm=document.getElementById('fg-count-confirm');
+  const ctext=document.getElementById('count-confirm-text');
+  if(selCount>1){
+    cconfirm.style.display='block';
+    if(selMode==='split') ctext.textContent='2人 — 哲瑋老師 + 泓文老師同時段';
+    else ctext.textContent=selCount+'人 — 同一師傅連續'+selCount+'個時段';
+  } else {
+    cconfirm.style.display='none';
+  }
   document.getElementById('sh-form').classList.add('show');
   setTimeout(()=>document.getElementById('f-phone').focus(),300);
 }
@@ -633,35 +765,58 @@ async function doSubmit(){
 
   try{
     let masterId=m?.id;
-    let status='confirmed';
+    let status='tentative';
+    let extraBooking=null; // for split mode
 
-    if(selM==='auto'){
+    if(selM==='split'){
+      // Book both zhiwei and hongwen
+      masterId=MASTERS.zhiwei.id;
+      extraBooking={master_id:MASTERS.hongwen.id};
+    } else if(selM==='auto'){
       masterId=await findFree(selD,selT);
       if(!masterId){toast('該時段已無空位','err');btn.disabled=false;btn.textContent='確認預約';return;}
     }
 
-    if(isReq) status='tentative';
-
     const raw=phone?`${name}${phone}`:name;
-    await sb('/bookings',{
-      method:'POST',
-      headers:{'Prefer':'return=minimal'},
-      body:JSON.stringify({
-        master_id:masterId||MASTERS.zhiwei.id,
-        raw_input:raw,customer_name:name,customer_phone:phone||null,
-        date:isReq?null:selD,
-        start_time:isReq?null:(selT+':00'),
-        guest_count:parseInt(count)||1,
-        color_tag:'none',
-        note:fullNote||null,
-        booking_source:'customer_app',status:'tentative'
-      })
-    });
+    const bookings=[];
+    const baseBooking={
+      master_id:masterId||MASTERS.zhiwei.id,
+      raw_input:raw,customer_name:name,customer_phone:phone||null,
+      date:isReq?null:selD,
+      start_time:isReq?null:(selT+':00'),
+      guest_count:1,
+      color_tag:'none',
+      note:fullNote||null,
+      booking_source:'customer_app',status:'tentative'
+    };
+    bookings.push(baseBooking);
 
-    // Save phone binding
+    // Split mode: add second booking for hongwen
+    if(selM==='split'){
+      bookings.push({...baseBooking,master_id:MASTERS.hongwen.id,customer_name:name+'-同行',raw_input:raw});
+    }
+    // Same master multi: add consecutive slots
+    else if(selMode==='same' && selCount>1){
+      for(let s=1;s<selCount;s++){
+        const nextT=getNextTimeStr(selT,s);
+        if(nextT) bookings.push({...baseBooking,start_time:nextT+':00',customer_name:name+(selCount>2?`-同行${s}`:`-同行`),raw_input:raw});
+      }
+    }
+
+    for(const bk of bookings){
+      await sb('/bookings',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(bk)});
+    }
+
+    // Save phone binding + update customers with LINE user ID
     if(profile?.userId){
       sb('/line_bindings',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
-        body:JSON.stringify({line_user_id:profile.userId,phone,display_name:name})}).catch(()=>{});
+        body:JSON.stringify({line_user_id:profile.userId,phone,display_name:profile.displayName||name})}).catch(()=>{});
+      // Update customers table with line_user_id
+      sb('/customers?phone=eq.'+encodeURIComponent(phone),{
+        method:'PATCH',
+        headers:{'Prefer':'return=minimal'},
+        body:JSON.stringify({line_user_id:profile.userId})
+      }).catch(()=>{});
     }
 
     // Notify
@@ -682,6 +837,12 @@ async function doSubmit(){
   btn.textContent=isReq?'送出申請':'確認預約';
 }
 
+function getNextTimeStr(t, steps){
+  const idx = TIMES.indexOf(t);
+  if(idx === -1 || idx+steps >= TIMES.length) return null;
+  return TIMES[idx+steps];
+}
+
 async function findFree(date,time){
   const rows=slotCache[date]||[];
   for(const mid of [MASTERS.zhiwei.id,MASTERS.hongwen.id]){
@@ -692,8 +853,11 @@ async function findFree(date,time){
 }
 
 function reset(){
-  selM=null;selD=null;selT=null;
-  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
+  selM=null;selD=null;selT=null;selCount=1;selMode='single';
+  document.querySelectorAll('.mc,[id^="cnt-"],[id^="mode-"]').forEach(el=>el.classList.remove('on','on-g'));
+  document.getElementById('sec-master-1').style.display='none';
+  document.getElementById('sec-master-multi').style.display='none';
+  document.getElementById('sec-master-same').style.display='none';
   document.getElementById('sec-date').style.display='none';
   document.getElementById('sec-time').style.display='none';
   document.getElementById('ctawrap').style.display='none';
