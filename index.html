@@ -189,13 +189,19 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 
       <div class="sec" id="sec-date" style="display:none">
         <div class="arrow">↓</div>
-        <div class="lbl">選擇日期</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="lbl" style="margin-bottom:0">選擇日期</div>
+          <button onclick="goBack('master')" style="background:none;border:1.5px solid var(--border);color:var(--t2);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit">← 重選師傅</button>
+        </div>
         <div class="drow" id="drow"></div>
       </div>
 
       <div class="sec" id="sec-time" style="display:none">
         <div class="arrow">↓</div>
-        <div class="lbl">選擇時段</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="lbl" style="margin-bottom:0">選擇時段</div>
+          <button onclick="goBack('date')" style="background:none;border:1.5px solid var(--border);color:var(--t2);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit">← 重選日期</button>
+        </div>
         <div class="tgrid" id="tgrid"></div>
       </div>
 
@@ -681,9 +687,16 @@ async function loadMyBookings(){
     const d=new Date(b.date);
     const stMap={confirmed:['st-ok','已確認'],tentative:['st-pend','待確認']};
     const [sc,st]=stMap[b.status]||['st-ok','確認'];
-    return `<div class="bk">
+    return `<div class="bk" id="bk-${b.id}">
       <div class="bk-db"><div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div></div>
-      <div class="bk-info"><div class="bk-time">${b.start_time.slice(0,5)}</div><div class="bk-mst">${MNAME[b.master_id]||''} 師傅</div></div>
+      <div class="bk-info">
+        <div class="bk-time">${b.start_time.slice(0,5)}</div>
+        <div class="bk-mst">${MNAME[b.master_id]||''} 老師</div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid var(--cyan);color:var(--cyan);cursor:pointer;font-family:inherit">修改時間</button>
+          <button onclick="cancelBooking('${b.id}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid var(--red);color:var(--red);cursor:pointer;font-family:inherit">取消預約</button>
+        </div>
+      </div>
       <span class="bk-st ${sc}">${st}</span>
     </div>`;
   }).join('');
@@ -696,7 +709,98 @@ function toast(msg,type){
   setTimeout(()=>el.className='toast',2500);
 }
 
+// ── Go back ──────────────────────────
+function goBack(to){
+  if(to==='master'){
+    selM=null;selD=null;selT=null;
+    document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
+    document.getElementById('sec-date').style.display='none';
+    document.getElementById('sec-time').style.display='none';
+    document.getElementById('ctawrap').style.display='none';
+    document.getElementById('pg-book').scrollIntoView({behavior:'smooth',block:'start'});
+  } else if(to==='date'){
+    selD=null;selT=null;
+    document.querySelectorAll('.dc').forEach(el=>el.classList.remove('on'));
+    document.getElementById('sec-time').style.display='none';
+    document.getElementById('ctawrap').style.display='none';
+    document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+}
+
+// ── Cancel booking ────────────────────
+async function cancelBooking(id){
+  if(!confirm('確定要取消這筆預約嗎？')) return;
+  try{
+    await sb(`/bookings?id=eq.${id}`,{
+      method:'PATCH',
+      headers:{'Prefer':'return=minimal'},
+      body:JSON.stringify({status:'cancelled'})
+    });
+    toast('已取消預約','ok');
+    loadMyBookings();
+  }catch(e){
+    toast('取消失敗，請重試','err');
+  }
+}
+
+// ── Modify booking ────────────────────
+function modifyBooking(id, masterId, date){
+  // Find master key
+  const mkey = Object.keys(MASTERS).find(k=>MASTERS[k].id===masterId)||'auto';
+  selM=mkey; selD=date; selT=null; modifyingId=id;
+  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
+  document.getElementById('mc-'+mkey)?.classList.add('on');
+  goPage('book');
+  document.getElementById('sec-date').style.display='block';
+  // Select the date chip
+  setTimeout(()=>{
+    document.querySelectorAll('.dc').forEach(el=>{
+      if(el.dataset.date===date) el.classList.add('on');
+    });
+    buildTimeSlots_modify(date);
+  },200);
+}
+
+let modifyingId = null;
+
+async function buildTimeSlots_modify(dateStr){
+  document.getElementById('sec-time').style.display='block';
+  document.getElementById('ctawrap').style.display='none';
+  await prefetch(dateStr);
+  renderSlots();
+  // Change CTA to say "修改"
+  document.getElementById('ctabtn').textContent='確認修改時間 →';
+  document.getElementById('ctabtn').onclick=openModifyConfirm;
+}
+
+function openModifyConfirm(){
+  if(!selT){toast('請選擇新時段','err');return;}
+  if(confirm(`確定修改為 ${selD} ${selT}？`)){
+    doModify();
+  }
+}
+
+async function doModify(){
+  if(!modifyingId||!selT) return;
+  try{
+    await sb(`/bookings?id=eq.${modifyingId}`,{
+      method:'PATCH',
+      headers:{'Prefer':'return=minimal'},
+      body:JSON.stringify({date:selD, start_time:selT+':00'})
+    });
+    toast('修改成功！','ok');
+    modifyingId=null;
+    document.getElementById('ctabtn').textContent='選好了，填資料 →';
+    document.getElementById('ctabtn').onclick=openForm;
+    reset();
+    goPage('my');
+  }catch(e){
+    toast('修改失敗，請重試','err');
+  }
+}
+
 // Close sheet on overlay click
+
 document.getElementById('sh-form').addEventListener('click',function(e){
   if(e.target===this) closeForm();
 });
