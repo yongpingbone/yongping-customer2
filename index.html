@@ -301,6 +301,19 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<!-- Success screen -->
+<div class="ov" id="sh-success">
+<div class="sheet" style="text-align:center">
+  <div style="font-size:40px;margin-bottom:12px">✅</div>
+  <div style="font-size:17px;font-weight:900;margin-bottom:16px">送出成功！</div>
+  <div id="success-msg" style="font-size:14px;color:var(--t2);line-height:1.8;white-space:pre-line;text-align:left;background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:20px"></div>
+  <button onclick="document.getElementById('sh-success').classList.remove('show');goPage('my')"
+    style="width:100%;padding:14px;border-radius:12px;background:var(--cyan);border:none;color:#000;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit">
+    查看我的預約
+  </button>
+</div>
+</div>
+
 <script>
 const SB_URL = 'https://ikzyzkhuireqztbhrtna.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlrenl6a2h1aXJlcXp0YmhydG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMjI1NjIsImV4cCI6MjA5Mjc5ODU2Mn0.rIXfMsiuYg6HoJaACxvxr1SFS9M3m7XNP57qcoyvRxw';
@@ -353,12 +366,26 @@ async function sb(path, opts={}){
 }
 
 // ── LINE push ────────────────────────
-async function linePush(text){
-  await fetch('https://api.line.me/v2/bot/message/broadcast',{
+// Master LINE IDs (from Vercel env - hardcoded here as fallback)
+const MASTER_LINE_MAP = {
+  '7ae4e5c5-bfa5-46f6-8a90-a96e8721cea5': 'U48df519c56d055eaa922d15d08b93f2b',   // 哲瑋
+  'b98e3afb-42d1-4149-b278-12d5493885b1': 'U2f7e14f8a48c0a629cebec7d4062a584',  // 泓文
+  '13eebe4e-9cee-45ee-aab9-d5b4cb4e6186': '8213e618-4213-44a7-bbe4-332d859c801c',       // 許老師
+  'e9021367-64c7-476d-a079-2e8e2475988e': '46d17f6c-4c72-4cf0-99b1-d0a8e3f74efd',      // 魏老師
+};
+
+async function linePushTo(userId, text){
+  if(!userId || userId.startsWith('__')) return;
+  await fetch('https://api.line.me/v2/bot/message/push',{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+LINE_TOKEN},
-    body:JSON.stringify({messages:[{type:'text',text}]})
+    body:JSON.stringify({to:userId, messages:[{type:'text',text}]})
   }).catch(()=>{});
+}
+
+async function linePush(text, masterId){
+  const lineId = MASTER_LINE_MAP[masterId];
+  await linePushTo(lineId, text);
 }
 
 // ── Init ─────────────────────────────
@@ -626,7 +653,7 @@ async function doSubmit(){
         guest_count:parseInt(count)||1,
         color_tag:'none',
         note:fullNote||null,
-        booking_source:'customer_app',status
+        booking_source:'customer_app',status:'tentative'
       })
     });
 
@@ -641,12 +668,11 @@ async function doSubmit(){
     const msg=isReq
       ? `📩 新預約申請\n師傅：${mname}\n姓名：${name}\n電話：${phone}\n${fullNote}\n\n請確認後通知客人`
       : `📅 新預約通知\n師傅：${MNAME[masterId]||mname}\n日期：${selD} ${selT}\n姓名：${name}\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
-    await linePush(msg);
+    await linePush(msg, masterId);
 
     closeForm();
-    toast(isReq?'申請已送出！師傅確認後通知您':'預約成功！','ok');
+    showSuccess(isReq);
     reset();
-    goPage('my');
   }catch(e){
     toast('送出失敗，請重試','err');
     console.error(e);
@@ -797,6 +823,45 @@ async function doModify(){
   }catch(e){
     toast('修改失敗，請重試','err');
   }
+}
+
+// ── Success screen ────────────────────
+function showSuccess(isReq){
+  const msg = isReq
+    ? `感謝申請！🙏
+老師和小編會盡快確認
+預約確認後再麻煩幫我準時抵達🙏
+
+⚡遲到10分鐘內：
+無法做滿30分鐘！
+
+⚡遲到超過15分鐘：
+請【主動告知】並協助改期！
+
+⚡放鳥2次 黑名單
+時間到沒出現沒告知，就是放鳥！
+
+我們都可以配合取消、改時間
+只要提前和我們說🙏🙏`
+    : `感謝預約！🙏
+老師和小編會盡快確認
+預約確認後再麻煩幫我準時抵達🙏
+
+⚡遲到10分鐘內：
+無法做滿30分鐘！
+
+⚡遲到超過15分鐘：
+請【主動告知】並協助改期！
+
+⚡放鳥2次 黑名單
+時間到沒出現沒告知，就是放鳥！
+
+我們都可以配合取消、改時間
+只要提前和我們說🙏🙏`;
+
+  const ov = document.getElementById('sh-success');
+  document.getElementById('success-msg').innerText = msg;
+  ov.classList.add('show');
 }
 
 // Close sheet on overlay click
