@@ -270,8 +270,8 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
     </div>
   </div>
 
-  <!-- 希望時段（麒/治必填） -->
-  <div class="fg" id="fg-avail">
+  <!-- 希望時段（只有申請制才顯示） -->
+  <div class="fg" id="fg-avail" style="display:none">
     <label class="fl">希望預約時段 <span id="avail-required" style="color:var(--gold)">（必填）</span></label>
     <div style="background:var(--bg3);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px">
       <div>
@@ -560,6 +560,7 @@ function openForm(){
   document.getElementById('sh-title').textContent=isReq?`申請預約 - ${mname}`:'填寫預約資料';
   // req note
   document.getElementById('sh-req-note').style.display=isReq?'block':'none';
+  document.getElementById('fg-avail').style.display=isReq?'block':'none';
   if(isReq) document.getElementById('sh-req-note').innerHTML='⚡ '+mname+'固定客多，需等待，送出後會有真人回覆確認時間。<br>如急需請致電：<b>02-8285-4865</b>';
   // sum
   if(!isReq){
