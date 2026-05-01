@@ -120,6 +120,7 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 .bk-st{font-size:11px;padding:3px 9px;border-radius:10px;flex-shrink:0}
 .st-ok{background:rgba(0,208,156,.15);color:var(--green)}
 .st-pend{background:var(--gdim);color:var(--gold)}
+.st-cancel{background:rgba(255,68,68,.15);color:var(--red)}
 
 /* Toast */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px 18px;font-size:14px;z-index:999;opacity:0;transition:.2s;pointer-events:none;white-space:nowrap}
@@ -665,24 +666,40 @@ function getMasterIds(){
 // ── Time pick ─────────────────────────
 function pickTime(t){
   selT=t;
-  document.querySelectorAll('.ts').forEach(el=>el.classList.toggle('on',el.dataset.time===t));
-  const canShowCTA = (selM||selMode==='split')&&selD&&selT;
+
+  // 計算這次預約會佔用的所有時段（多人連續模式下會有多格）
+  let reservedSlots=[t];
+  if(selMode==='same'&&selCount>1){
+    reservedSlots=[];
+    for(let s=0;s<selCount;s++){
+      const nt=getNextTimeStr(t,s);
+      if(nt) reservedSlots.push(nt);
+    }
+  }
+
+  // 驗證 1：時段索引足夠（沒超出當日尾段）
+  const enough=reservedSlots.length===(selMode==='same'&&selCount>1?selCount:1);
+  // 驗證 2：所有要佔的後續時段都不能是「已滿/已過」
+  const fullSet=new Set(Array.from(document.querySelectorAll('.ts.full')).map(el=>el.dataset.time));
+  const conflict=reservedSlots.slice(1).find(s=>fullSet.has(s));
+
+  if(!enough||conflict){
+    document.getElementById('ctawrap').style.display='none';
+    document.querySelectorAll('.ts').forEach(el=>el.classList.remove('on'));
+    if(conflict) toast(`${conflict} 已被預約，無法連續 ${selCount} 格`,'err');
+    else toast('此時段後續格子不足，請選其他時段','err');
+    return;
+  }
+
+  // 把所有要預約的時段都加上 on（高亮）— 客人就能直接看到 2 格被選起來
+  document.querySelectorAll('.ts').forEach(el=>el.classList.toggle('on',reservedSlots.includes(el.dataset.time)));
+
+  const canShowCTA=(selM||selMode==='split')&&selD&&selT;
   document.getElementById('ctawrap').style.display=canShowCTA?'block':'none';
   // Update CTA text
   if(selMode==='split') document.getElementById('ctabtn').textContent='選好了，填資料 →';
   else if(selMode==='same'&&selCount>1){
-    const slots=[];
-    for(let s=0;s<selCount;s++){
-      const nt=getNextTimeStr(t,s);
-      if(nt) slots.push(nt);
-    }
-    // Only show if we have enough slots
-    if(slots.length < selCount){
-      document.getElementById('ctawrap').style.display='none';
-      toast('此時段後續格子不足，請選其他時段','err');
-      return;
-    }
-    document.getElementById('ctabtn').textContent=`${slots.join(' + ')} 共${slots.length}格 →`;
+    document.getElementById('ctabtn').textContent=`${reservedSlots.join(' + ')} 共${reservedSlots.length}格 →`;
   }
   setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),80);
 }
@@ -896,21 +913,42 @@ async function loadMyBookings(){
   const phone=bindings?.[0]?.phone;
   if(!phone){el.innerHTML='<div class="empty" style="font-size:13px">完成第一次預約後<br>預約紀錄會顯示在這裡</div>';return;}
   const today=new Date().toISOString().slice(0,10);
-  const bks=await sb(`/bookings?customer_phone=eq.${phone}&date=gte.${today}&status=neq.cancelled&order=date,start_time&limit=20`).catch(()=>[]);
+  // 取得所有未結束/未取消的預約（包含「取消申請中」也要顯示給客人看）
+  const bks=await sb(`/bookings?customer_phone=eq.${phone}&date=gte.${today}&status=in.(confirmed,tentative,cancellation_requested)&order=date,start_time&limit=20`).catch(()=>[]);
   if(!bks||!bks.length){el.innerHTML='<div class="empty">目前沒有即將到來的預約</div>';return;}
+  const now=new Date();
   el.innerHTML=bks.map(b=>{
     const d=new Date(b.date);
-    const stMap={confirmed:['st-ok','已確認'],tentative:['st-pend','待確認']};
+    const stMap={confirmed:['st-ok','已確認'],tentative:['st-pend','待確認'],cancellation_requested:['st-cancel','取消申請中']};
     const [sc,st]=stMap[b.status]||['st-ok','確認'];
+    // 判斷是否距離預約時間 24 小時以上（24 小時前可自助申請取消，24 小時內必須聯絡師傅）
+    const bkTime=new Date(`${b.date}T${b.start_time||'09:00:00'}`);
+    const hoursUntil=(bkTime-now)/(1000*60*60);
+    const canSelfCancel=hoursUntil>=24&&b.status!=='cancellation_requested';
+    const isPending=b.status==='cancellation_requested';
+    let actionBtns='';
+    if(isPending){
+      // 已申請取消，等師傅處理；不再顯示按鈕避免重複申請
+      actionBtns=`<div style="font-size:11px;color:var(--t2);margin-top:6px">⏳ 已送出取消申請，等待師傅確認</div>`;
+    }else if(canSelfCancel){
+      // 24h 前 → 自助申請取消
+      actionBtns=`<div style="display:flex;gap:6px;margin-top:6px">
+        <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid var(--cyan);color:var(--cyan);cursor:pointer;font-family:inherit">修改時間</button>
+        <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time?b.start_time.slice(0,5):''}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid var(--red);color:var(--red);cursor:pointer;font-family:inherit">申請取消</button>
+      </div>`;
+    }else{
+      // 24h 內 → 須直接聯絡師傅
+      actionBtns=`<div style="display:flex;gap:6px;margin-top:6px">
+        <button onclick="contactMasterToCancel('${b.master_id}','${b.date}','${b.start_time?b.start_time.slice(0,5):''}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid #06c755;color:#06c755;cursor:pointer;font-family:inherit">💬 聯絡師傅</button>
+      </div>
+      <div style="font-size:10px;color:var(--t2);margin-top:4px">※ 24 小時內請直接聯絡師傅</div>`;
+    }
     return `<div class="bk" id="bk-${b.id}">
       <div class="bk-db"><div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div></div>
       <div class="bk-info">
         <div class="bk-time">${b.start_time.slice(0,5)}</div>
         <div class="bk-mst">${MNAME[b.master_id]||''} 老師</div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid var(--cyan);color:var(--cyan);cursor:pointer;font-family:inherit">修改時間</button>
-          <button onclick="contactMasterToCancel('${b.master_id}','${b.date}','${b.start_time?b.start_time.slice(0,5):""}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid #06c755;color:#06c755;cursor:pointer;font-family:inherit">💬 聯絡師傅取消</button>
-        </div>
+        ${actionBtns}
       </div>
       <span class="bk-st ${sc}">${st}</span>
     </div>`;
@@ -939,6 +977,33 @@ function goBack(to){
     document.getElementById('sec-time').style.display='none';
     document.getElementById('ctawrap').style.display='none';
     document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+}
+
+// ── Request cancellation (自助申請取消) ───
+async function requestCancellation(bookingId, masterId, date, time){
+  const reason=(prompt('請簡單寫一下取消原因（可不填）：','')||'').trim();
+  if(!confirm(`確定要申請取消 ${date} ${time} 的預約嗎？\n\n師傅看到後會處理，正式取消前你的時段仍會保留。`))return;
+  try{
+    // 取得原本的 note 以便附加取消原因
+    const cur=await sb(`/bookings?id=eq.${bookingId}&select=note`).catch(()=>[]);
+    const oldNote=cur?.[0]?.note||'';
+    const stamp=new Date().toLocaleString('zh-TW',{hour12:false}).replace(/\//g,'-');
+    const reasonLine=reason?`[取消申請 ${stamp}] ${reason}`:`[取消申請 ${stamp}]`;
+    const newNote=oldNote?`${reasonLine}\n${oldNote}`:reasonLine;
+    await sb(`/bookings?id=eq.${bookingId}`,{
+      method:'PATCH',
+      headers:{'Prefer':'return=minimal'},
+      body:JSON.stringify({status:'cancellation_requested',note:newNote,last_edited_at:new Date().toISOString()})
+    });
+    // 推 LINE 給師傅
+    const msg=`❌ 客人申請取消預約\n日期：${date} ${time}\n${reason?`原因：${reason}\n`:''}\n請至師傅 app「📋 待確認 → 取消請求」處理`;
+    await linePush(msg, masterId);
+    toast('已送出取消申請','ok');
+    loadMyBookings();
+  }catch(e){
+    console.error(e);
+    toast('送出失敗，請再試一次','err');
   }
 }
 
