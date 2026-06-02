@@ -100,6 +100,7 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 
 /* Info box */
 .info-box{background:var(--bg3);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--t2);line-height:1.7;border-left:3px solid var(--gold)}
+.warning-box{background:rgba(255,100,100,.08);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--red);line-height:1.7;border-left:3px solid var(--red)}
 
 /* Buttons row */
 .btn-row{display:flex;gap:10px;margin-top:6px}
@@ -133,6 +134,10 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 .spin{width:36px;height:36px;border:2.5px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:rot .7s linear infinite}
 @keyframes rot{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:50px 20px;color:var(--t2)}
+
+/* Edit button for summary */
+.edit-btn{background:none;border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s}
+.edit-btn:hover{border-color:var(--cyan);color:var(--cyan)}
 </style>
 </head>
 <body>
@@ -285,6 +290,83 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 
 </div>
 
+<!-- 首次填寫客人資料 modal（LINE登錄後） -->
+<div class="ov" id="sh-first-setup">
+<div class="sheet">
+  <div class="s-handle"></div>
+  <div class="s-title">👋 歡迎來預約！</div>
+  <div class="info-box">請先填寫基本資料，方便我們為您提供更好的服務</div>
+
+  <!-- 姓名 -->
+  <div class="fg">
+    <label class="fl">姓名（全名或姓氏皆可） <span style="color:var(--red)">*</span></label>
+    <input class="fi" id="setup-name" placeholder="請輸入姓名" autocomplete="off" />
+  </div>
+
+  <!-- 電話 -->
+  <div class="fg">
+    <label class="fl">手機號碼 <span style="color:var(--red)">*</span></label>
+    <input class="fi" id="setup-phone" placeholder="09xxxxxxxx" type="tel" inputmode="numeric" />
+  </div>
+
+  <!-- 年齡 -->
+  <div class="fg">
+    <label class="fl">年齡 <span style="color:var(--red)">*</span></label>
+    <input class="fi" id="setup-age" placeholder="請輸入年齡" type="number" inputmode="numeric" min="0" max="150" />
+    <div class="warning-box" id="setup-age-warning" style="display:none;margin-top:8px">
+      ⚠️ 70歲以上的客人，建議先與師傅溝通，確認是否適合整復。
+    </div>
+  </div>
+
+  <!-- 5年內骨折 -->
+  <div class="fg">
+    <label class="fl">5年內是否有骨折（打骨釘）</label>
+    <div class="chips" id="setup-chips-fracture">
+      <button class="chip" onclick="setupPickChip('fracture','無')">無</button>
+      <button class="chip" onclick="setupPickChip('fracture','有，已復原')">有，已復原</button>
+      <button class="chip" onclick="setupPickChip('fracture','有，未完全復原')">有，未完全復原</button>
+    </div>
+  </div>
+
+  <!-- 脊椎開刀 -->
+  <div class="fg">
+    <label class="fl">是否開過刀（脊椎相關）</label>
+    <div class="chips" id="setup-chips-spine">
+      <button class="chip" onclick="setupPickChip('spine','無')">無</button>
+      <button class="chip" onclick="setupPickChip('spine','有，未滿1年')">有，未滿1年</button>
+      <button class="chip" onclick="setupPickChip('spine','有，1-3年')">有，1-3年</button>
+      <button class="chip" onclick="setupPickChip('spine','有，3年以上')">有，3年以上</button>
+    </div>
+  </div>
+
+  <div class="btn-row" style="margin-top:20px">
+    <button class="btn-ok btn-cyan" style="flex:1" onclick="completeFirstSetup()">完成，開始預約 →</button>
+  </div>
+</div>
+</div>
+
+<!-- 確認客人資料 modal（預約時確認） -->
+<div class="ov" id="sh-confirm">
+<div class="sheet">
+  <div class="s-handle"></div>
+  <div class="s-title">確認您的資料</div>
+  <div class="info-box">上次登錄後儲存的資料，請確認是否需要修改</div>
+  
+  <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:16px;line-height:1.9;font-size:14px">
+    <div><span style="color:var(--t2)">姓名：</span><span id="confirm-name" style="font-weight:700"></span></div>
+    <div><span style="color:var(--t2)">電話：</span><span id="confirm-phone" style="font-weight:700"></span></div>
+    <div><span style="color:var(--t2)">年齡：</span><span id="confirm-age" style="font-weight:700"></span></div>
+    <div><span style="color:var(--t2)">5年內骨折：</span><span id="confirm-fracture" style="font-weight:700"></span></div>
+    <div><span style="color:var(--t2)">脊椎開刀：</span><span id="confirm-spine" style="font-weight:700"></span></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-cancel" onclick="editStoredData()">編輯資料</button>
+    <button class="btn-ok btn-cyan" onclick="useStoredData()">使用儲存資料</button>
+  </div>
+</div>
+</div>
+
 <!-- 表單 sheet（所有師傅共用） -->
 <div class="ov" id="sh-form">
 <div class="sheet">
@@ -302,31 +384,50 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 
   <!-- 姓名 -->
   <div class="fg">
-    <label class="fl">姓名（全名或姓氏皆可）</label>
+    <label class="fl">姓名（全名或姓氏皆可） <span style="color:var(--red)">*</span></label>
     <input class="fi" id="f-name" placeholder="請輸入姓名" autocomplete="off" />
   </div>
 
   <!-- 電話 -->
   <div class="fg">
-    <label class="fl">手機號碼</label>
+    <label class="fl">手機號碼 <span style="color:var(--red)">*</span></label>
     <input class="fi" id="f-phone" placeholder="09xxxxxxxx" type="tel" inputmode="numeric" />
+  </div>
+
+  <!-- 年齡 -->
+  <div class="fg">
+    <label class="fl">年齡 <span style="color:var(--red)">*</span></label>
+    <input class="fi" id="f-age" placeholder="請輸入年齡" type="number" inputmode="numeric" min="0" max="150" />
+    <div class="warning-box" id="age-warning" style="display:none;margin-top:8px">
+      ⚠️ 70歲以上的客人，建議先與師傅溝通，確認是否適合整復。
+    </div>
+  </div>
+
+  <!-- 5年內骨折 -->
+  <div class="fg">
+    <label class="fl">5年內是否有骨折（打骨釘）</label>
+    <div class="chips" id="chips-fracture">
+      <button class="chip" onclick="pickChip('fracture','無')">無</button>
+      <button class="chip" onclick="pickChip('fracture','有，已復原')">有，已復原</button>
+      <button class="chip" onclick="pickChip('fracture','有，未完全復原')">有，未完全復原</button>
+    </div>
+  </div>
+
+  <!-- 脊椎開刀 -->
+  <div class="fg">
+    <label class="fl">是否開過刀（脊椎相關）</label>
+    <div class="chips" id="chips-spine">
+      <button class="chip" onclick="pickChip('spine','無')">無</button>
+      <button class="chip" onclick="pickChip('spine','有，未滿1年')">有，未滿1年</button>
+      <button class="chip" onclick="pickChip('spine','有，1-3年')">有，1-3年</button>
+      <button class="chip" onclick="pickChip('spine','有，3年以上')">有，3年以上</button>
+    </div>
   </div>
 
   <!-- 人數已在前面選好，這裡顯示確認 -->
   <div class="fg" id="fg-count-confirm" style="display:none">
     <label class="fl">預約人數</label>
     <div id="count-confirm-text" style="font-size:16px;font-weight:700;color:var(--cyan);padding:8px 0"></div>
-  </div>
-
-  <!-- 有無開過刀 -->
-  <div class="fg">
-    <label class="fl">有無開過刀</label>
-    <div class="chips" id="chips-op">
-      <button class="chip" onclick="pickChip('op','無')">無</button>
-      <button class="chip" onclick="pickChip('op','有，未滿1年')">有，未滿1年</button>
-      <button class="chip" onclick="pickChip('op','有，1-3年')">有，1-3年</button>
-      <button class="chip" onclick="pickChip('op','有，3年以上')">有，3年以上</button>
-    </div>
   </div>
 
   <!-- 希望時段（只有申請制才顯示） -->
@@ -344,10 +445,14 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
     </div>
   </div>
 
-  <!-- 想預約的時間（哲瑋/泓文/auto 才顯示確切時間摘要） -->
-  <div class="fg" id="fg-note">
-    <label class="fl">備註（選填）</label>
-    <input class="fi" id="f-note" placeholder="例如：有舊傷、特殊狀況..." />
+  <!-- 備註 -->
+  <div class="fg">
+    <label class="fl">備註（選填）
+      <span style="color:var(--t2);font-size:11px;font-weight:400">
+        若2人以上，請在此備註第二人基本資料
+      </span>
+    </label>
+    <textarea class="fi" id="f-note" placeholder="例如：有舊傷、特殊狀況、同行者資料..."></textarea>
   </div>
 
   <div class="btn-row">
@@ -415,6 +520,66 @@ let chipVals = {};
 let slotCache = {}; // date+masterKey -> booked set
 let selectedDays = new Set();
 
+// ────────────────────────────────────────
+// localStorage 客人資料管理
+// ────────────────────────────────────────
+const STORAGE_KEY = 'yongping_customer_data';
+
+function saveCustomerData(){
+  const data = {
+    name: document.getElementById('f-name').value.trim(),
+    phone: document.getElementById('f-phone').value.trim(),
+    age: document.getElementById('f-age').value.trim(),
+    fracture: chipVals['fracture'] || '',
+    spine: chipVals['spine'] || '',
+    note: document.getElementById('f-note').value.trim(),
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function getStoredCustomerData(){
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored ? JSON.parse(stored) : null;
+}
+
+function loadStoredData(data){
+  document.getElementById('f-name').value = data.name || '';
+  document.getElementById('f-phone').value = data.phone || '';
+  document.getElementById('f-age').value = data.age || '';
+  document.getElementById('f-note').value = data.note || '';
+  if(data.fracture) pickChip('fracture', data.fracture);
+  if(data.spine) pickChip('spine', data.spine);
+  // 檢查年齡警告
+  checkAgeWarning();
+}
+
+function showConfirmStoredData(data){
+  document.getElementById('confirm-name').textContent = data.name || '—';
+  document.getElementById('confirm-phone').textContent = data.phone || '—';
+  document.getElementById('confirm-age').textContent = data.age ? data.age + '歲' : '—';
+  document.getElementById('confirm-fracture').textContent = data.fracture || '—';
+  document.getElementById('confirm-spine').textContent = data.spine || '—';
+  document.getElementById('sh-confirm').classList.add('show');
+}
+
+function useStoredData(){
+  const stored = getStoredCustomerData();
+  if(stored){
+    loadStoredData(stored);
+    document.getElementById('sh-confirm').classList.remove('show');
+    document.getElementById('sh-form').classList.add('show');
+  }
+}
+
+function editStoredData(){
+  const stored = getStoredCustomerData();
+  if(stored){
+    loadStoredData(stored);
+  }
+  document.getElementById('sh-confirm').classList.remove('show');
+  document.getElementById('sh-form').classList.add('show');
+}
+
 // ── Supabase fetch ───────────────────
 async function sb(path, opts={}){
   const r = await fetch(SB_URL+'/rest/v1'+path,{
@@ -427,12 +592,11 @@ async function sb(path, opts={}){
 }
 
 // ── LINE push ────────────────────────
-// Master LINE IDs (from Vercel env - hardcoded here as fallback)
 const MASTER_LINE_MAP = {
   '7ae4e5c5-bfa5-46f6-8a90-a96e8721cea5': 'U48df519c56d055eaa922d15d08b93f2b',   // 哲瑋
   'b98e3afb-42d1-4149-b278-12d5493885b1': 'U2f7e14f8a48c0a629cebec7d4062a584',  // 泓文
-  '13eebe4e-9cee-45ee-aab9-d5b4cb4e6186': 'Ub82002e257e69d5207108135cd1e9491',       // 許老師
-  'e9021367-64c7-476d-a079-2e8e2475988e': 'Uc79f52be676c79d51b5b8e3f265e5af4',      // 魏老師
+  '13eebe4e-9cee-45ee-aab9-d5b4cb4e6186': 'Ub82002e257e69d5207108135cd1e9491',   // 許老師
+  'e9021367-64c7-476d-a079-2e8e2475988e': 'Uc79f52be676c79d51b5b8e3f265e5af4',   // 魏老師
 };
 
 async function linePushTo(userId, text){
@@ -449,6 +613,64 @@ async function linePush(text, masterId){
   await linePushTo(lineId, text);
 }
 
+let setupChipVals = {}; // 首次設置時的chip值
+
+function setupPickChip(group, val){
+  setupChipVals[group] = val;
+  const container = document.getElementById('setup-chips-'+group);
+  container.querySelectorAll('.chip').forEach(el=>{
+    el.classList.toggle('on', el.textContent === val);
+    el.classList.remove('on-g');
+  });
+}
+
+function checkSetupAgeWarning(){
+  const ageVal = document.getElementById('setup-age').value.trim();
+  const warningEl = document.getElementById('setup-age-warning');
+  if(ageVal && parseInt(ageVal) >= 70){
+    warningEl.style.display='block';
+  } else {
+    warningEl.style.display='none';
+  }
+}
+
+async function completeFirstSetup(){
+  const name = document.getElementById('setup-name').value.trim();
+  const phone = document.getElementById('setup-phone').value.trim();
+  const age = document.getElementById('setup-age').value.trim();
+  
+  if(!name){toast('請輸入姓名','err');return;}
+  if(!phone || !/^09\d{8}$/.test(phone)){toast('請輸入正確手機號碼','err');return;}
+  if(!age){toast('請輸入年齡','err');return;}
+
+  // Save to localStorage
+  const data = {
+    name: name,
+    phone: phone,
+    age: age,
+    fracture: setupChipVals['fracture'] || '',
+    spine: setupChipVals['spine'] || '',
+    note: '',
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+  // Save to Supabase line_bindings
+  if(profile?.userId){
+    sb('/line_bindings',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
+      body:JSON.stringify({
+        line_user_id:profile.userId,
+        phone:phone,
+        display_name:profile.displayName||name,
+        age:parseInt(age),
+        fracture_history:setupChipVals['fracture']||'',
+        spine_surgery:setupChipVals['spine']||''
+      })}).catch(()=>{});
+  }
+
+  document.getElementById('sh-first-setup').classList.remove('show');
+  toast('資料已儲存！','ok');
+}
+
 // ── Init ─────────────────────────────
 async function init(){
   try{
@@ -461,6 +683,18 @@ async function init(){
     // save line binding
     sb('/line_bindings',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
       body:JSON.stringify({line_user_id:profile.userId,display_name:profile.displayName})}).catch(()=>{});
+
+    // Check if customer data exists
+    const stored = getStoredCustomerData();
+    if(!stored || !stored.name || !stored.phone){
+      // First time: show setup form
+      document.getElementById('sh-first-setup').classList.add('show');
+      document.getElementById('loader').style.display='none';
+      const app=document.getElementById('app');
+      app.style.display='flex';
+      setTimeout(()=>document.getElementById('setup-name').focus(),300);
+      return;
+    }
   }catch(e){
     profile={userId:'dev',displayName:'',pictureUrl:''};
     document.getElementById('uname').textContent='訪客';
@@ -524,11 +758,9 @@ function pickMode(mode){
     document.getElementById('sec-master-same').style.display='block';
     setTimeout(()=>document.getElementById('sec-master-same').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
   } else if(mode === 'split'){
-    // Split mode: no master to select, go straight to date
     selM = 'split';
     document.getElementById('sec-date').style.display='block';
     buildDates();
-    // Pre-fetch
     const today=new Date();
     for(let i=0;i<7;i++){
       const d=new Date(today);d.setDate(d.getDate()+i);
@@ -546,162 +778,106 @@ function pickM(key){
   chip.classList.add(isReq?'on-g':'on');
 
   if(isReq){
-    // 許老師/魏老師：直接跳申請表單
     document.getElementById('sec-date').style.display='none';
     document.getElementById('sec-time').style.display='none';
-    document.getElementById('ctawrap').style.display='none';
-    openForm();
-    return;
+    document.getElementById('ctawrap').style.display='block';
+    setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+  } else {
+    document.getElementById('sec-date').style.display='block';
+    buildDates();
+    const today=new Date();
+    for(let i=0;i<7;i++){
+      const d=new Date(today);d.setDate(d.getDate()+i);
+      prefetch(d.toISOString().slice(0,10));
+    }
+    setTimeout(()=>document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
   }
-
-  // 哲瑋老師/泓文老師/不指定：顯示日期選擇
-  document.getElementById('sec-date').style.display='block';
-  document.getElementById('sec-time').style.display='none';
-  document.getElementById('ctawrap').style.display='none';
-  const today=new Date();
-  for(let i=0;i<7;i++){
-    const d=new Date(today);d.setDate(d.getDate()+i);
-    prefetch(d.toISOString().slice(0,10));
-  }
-  setTimeout(()=>document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
 }
 
 // ── Build dates ───────────────────────
 function buildDates(){
-  const row=document.getElementById('drow');
-  row.innerHTML='';
-  const now=new Date(); now.setHours(0,0,0,0);
-  const lastWeek=new Date(now.getFullYear(),now.getMonth()+1,0);
-  lastWeek.setDate(lastWeek.getDate()-6);
-  const end=new Date(now.getFullYear(),now.getMonth()+(now>=lastWeek?2:1),0);
-  for(let d=new Date(now);d<=end;d.setDate(d.getDate()+1)){
-    const dd=new Date(d);
-    const str=dd.toISOString().slice(0,10);
-    const el=document.createElement('div');
-    el.className='dc';el.dataset.date=str;
-    const isSun = dd.getDay() === 0;
-    el.innerHTML=`<div class="d-mo">${dd.getMonth()+1}月</div><div class="d-num">${dd.getDate()}</div><div class="d-wk">週${WK[dd.getDay()]}</div>`;
-    if(isSun){
-      el.classList.add('dim');
-    } else {
-      el.onclick=()=>pickDate(str);
-    }
-    row.appendChild(el);
+  const drow=document.getElementById('drow');
+  drow.innerHTML='';
+  const today=new Date();
+  for(let i=0;i<30;i++){
+    const d=new Date(today);
+    d.setDate(d.getDate()+i);
+    const dateStr=d.toISOString().slice(0,10);
+    const mo=(d.getMonth()+1);
+    const dd=d.getDate();
+    const wk=WK[d.getDay()];
+    const dc=document.createElement('div');
+    dc.className='dc';
+    dc.dataset.date=dateStr;
+    dc.innerHTML=`<div class="d-mo">${mo}月</div><div class="d-num">${dd}</div><div class="d-wk">週${wk}</div>`;
+    dc.onclick=()=>pickDate(dateStr);
+    drow.appendChild(dc);
   }
 }
 
-// ── Prefetch slots ────────────────────
+function pickDate(dateStr){
+  selD=dateStr; selT=null;
+  document.querySelectorAll('.dc').forEach(el=>el.classList.remove('on'));
+  document.querySelector(`[data-date="${dateStr}"]`)?.classList.add('on');
+  document.getElementById('sec-time').style.display='block';
+  prefetch(dateStr);
+  setTimeout(()=>document.getElementById('sec-time').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+}
+
 async function prefetch(dateStr){
   if(slotCache[dateStr]) return;
-  slotCache[dateStr]='loading';
-  const mids = [MASTERS.zhiwei.id,MASTERS.hongwen.id,MASTERS.qi.id,MASTERS.zhi.id];
-  const list=mids.map(id=>`"${id}"`).join(',');
-  const rows = await sb(`/bookings?master_id=in.(${list})&date=eq.${dateStr}&status=in.(confirmed,tentative)&select=start_time,color_tag,master_id&color_tag=neq.vacation`).catch(()=>[]);
-  // Also get vacation slots to mark them as full
-  const vrows = await sb(`/bookings?master_id=in.(${list})&date=eq.${dateStr}&status=eq.confirmed&color_tag=eq.vacation&select=start_time,color_tag,master_id`).catch(()=>[]);
-  const allRows = [...(rows||[]), ...(vrows||[])];
-  slotCache[dateStr]=rows||[];
+  try{
+    const rows=await sb(`/bookings?date=eq.${dateStr}&select=id,master_id,start_time,status`);
+    slotCache[dateStr]=rows||[];
+    if(selD===dateStr) renderSlots();
+  }catch(e){}
 }
 
-// ── Date pick ─────────────────────────
-async function pickDate(str){
-  selD=str; selT=null;
-  document.querySelectorAll('.dc').forEach(el=>el.classList.toggle('on',el.dataset.date===str));
-  document.getElementById('sec-time').style.display='block';
-  document.getElementById('ctawrap').style.display='none';
-  renderSlots();
-  setTimeout(()=>document.getElementById('sec-time').scrollIntoView({behavior:'smooth',block:'nearest'}),80);
-  // Ensure fetched
-  if(!slotCache[str]||slotCache[str]==='loading'){
-    await prefetch(str);
-    renderSlots();
-  }
-}
-
-// ── Render slots ──────────────────────
 function renderSlots(){
-  const grid=document.getElementById('tgrid');
-  const rows=slotCache[selD];
-  const isLoading=!rows||rows==='loading';
-
-  if(isLoading){
-    grid.innerHTML=TIMES.map(t=>`<div class="ts sk">${t}</div>`).join('');
-    return;
-  }
-
-  const now=new Date();
-  const isToday=selD===now.toISOString().slice(0,10);
-  const masterIds=getMasterIds();
-
-  grid.innerHTML='';
+  const tgrid=document.getElementById('tgrid');
+  tgrid.innerHTML='';
+  const rows=slotCache[selD]||[];
   TIMES.forEach(t=>{
-    const [hh,mm]=t.split(':').map(Number);
-    const isPast=isToday&&(hh*60+mm)<=(now.getHours()*60+now.getMinutes()+30);
-    const bookedForMasters=rows.filter(b=>masterIds.includes(b.master_id)&&b.start_time.slice(0,5)===t);
-    const isFull=isPast||(selM==='auto'
-      ? bookedForMasters.length>=masterIds.length
-      : bookedForMasters.length>0
-    );
-    const el=document.createElement('div');
-    el.dataset.time=t;
-    if(isFull){
-      el.className='ts full';
-      el.textContent=isPast?'已過':'已滿';
-    } else {
-      el.className='ts'+(selT===t?' on':'');
-      el.textContent=t;
-      el.onclick=()=>pickTime(t);
+    const ts=document.createElement('button');
+    ts.className='ts';
+    const isTaken=rows.some(b=>{
+      if(selM==='split') return b.start_time.slice(0,5)===t;
+      const mid=MASTERS[selM]?.id;
+      return b.master_id===mid&&b.start_time.slice(0,5)===t;
+    });
+    if(isTaken){
+      ts.className+=' full';
+      ts.textContent='已滿';
+      ts.onclick=null;
+    }else{
+      ts.textContent=t;
+      ts.onclick=()=>pickTime(t);
+      if(selT===t) ts.classList.add('on');
     }
-    grid.appendChild(el);
+    tgrid.appendChild(ts);
   });
+  document.getElementById('ctawrap').style.display = (selT ? 'block' : 'none');
 }
 
-function getMasterIds(){
-  if(selM==='split') return [MASTERS.zhiwei.id,MASTERS.hongwen.id];
-  if(selM==='auto'||!selM) return [MASTERS.zhiwei.id,MASTERS.hongwen.id];
-  if(MASTERS[selM]?.id) return [MASTERS[selM].id];
-  return [];
-}
-
-// ── Time pick ─────────────────────────
 function pickTime(t){
   selT=t;
-
-  // 計算這次預約會佔用的所有時段（多人連續模式下會有多格）
-  let reservedSlots=[t];
-  if(selMode==='same'&&selCount>1){
-    reservedSlots=[];
-    for(let s=0;s<selCount;s++){
-      const nt=getNextTimeStr(t,s);
-      if(nt) reservedSlots.push(nt);
-    }
-  }
-
-  // 驗證 1：時段索引足夠（沒超出當日尾段）
-  const enough=reservedSlots.length===(selMode==='same'&&selCount>1?selCount:1);
-  // 驗證 2：所有要佔的後續時段都不能是「已滿/已過」
-  const fullSet=new Set(Array.from(document.querySelectorAll('.ts.full')).map(el=>el.dataset.time));
-  const conflict=reservedSlots.slice(1).find(s=>fullSet.has(s));
-
-  if(!enough||conflict){
-    document.getElementById('ctawrap').style.display='none';
-    document.querySelectorAll('.ts').forEach(el=>el.classList.remove('on'));
-    if(conflict) toast(`${conflict} 已被預約，無法連續 ${selCount} 格`,'err');
-    else toast('此時段後續格子不足，請選其他時段','err');
-    return;
-  }
-
-  // 把所有要預約的時段都加上 on（高亮）— 客人就能直接看到 2 格被選起來
-  document.querySelectorAll('.ts').forEach(el=>el.classList.toggle('on',reservedSlots.includes(el.dataset.time)));
-
-  const canShowCTA=(selM||selMode==='split')&&selD&&selT;
-  document.getElementById('ctawrap').style.display=canShowCTA?'block':'none';
-  // Update CTA text
+  renderSlots();
+  document.getElementById('ctawrap').style.display='block';
+  document.getElementById('ctabtn').textContent='選好了，填資料 →';
+  document.getElementById('ctabtn').onclick=openForm;
   if(selMode==='split') document.getElementById('ctabtn').textContent='選好了，填資料 →';
-  else if(selMode==='same'&&selCount>1){
-    document.getElementById('ctabtn').textContent=`${reservedSlots.join(' + ')} 共${reservedSlots.length}格 →`;
-  }
   setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),80);
+}
+
+// ── Check age warning ─────────────────
+function checkAgeWarning(){
+  const ageVal = document.getElementById('f-age').value.trim();
+  const warningEl = document.getElementById('age-warning');
+  if(ageVal && parseInt(ageVal) >= 70){
+    warningEl.style.display='block';
+  } else {
+    warningEl.style.display='none';
+  }
 }
 
 // ── Open form ─────────────────────────
@@ -712,6 +888,22 @@ function openForm(){
   const m=MASTERS[selM]||{};
   const isReq=m?.type==='request';
   const mname=selM==='split'?'哲瑋老師 + 泓文老師':(isReq?m.name:(selM==='auto'?'不指定':m.name));
+
+  // Load stored data into form
+  const stored = getStoredCustomerData();
+  if(stored && stored.name && stored.phone){
+    loadStoredData(stored);
+  } else {
+    // Reset form fields
+    chipVals={};selectedDays=new Set();
+    document.getElementById('f-name').value='';
+    document.getElementById('f-phone').value='';
+    document.getElementById('f-age').value='';
+    document.querySelectorAll('.chip').forEach(el=>el.classList.remove('on','on-g'));
+    if(document.getElementById('f-weekday')) document.getElementById('f-weekday').value='';
+    if(document.getElementById('f-weekend')) document.getElementById('f-weekend').value='';
+    document.getElementById('f-note').value='';
+  }
 
   // Title
   document.getElementById('sh-title').textContent=isReq?`申請預約 - ${mname}`:'填寫預約資料';
@@ -733,14 +925,6 @@ function openForm(){
   const ok=document.getElementById('sh-ok');
   ok.textContent=isReq?'送出申請':'確認預約';
   ok.className=`btn-ok ${isReq?'btn-gold':'btn-cyan'}`;
-  // reset chips
-  chipVals={};selectedDays=new Set();
-  document.getElementById('f-name').value='';
-  document.getElementById('f-phone').value='';
-  document.querySelectorAll('.chip').forEach(el=>el.classList.remove('on','on-g'));
-  if(document.getElementById('f-weekday')) document.getElementById('f-weekday').value='';
-  if(document.getElementById('f-weekend')) document.getElementById('f-weekend').value='';
-  document.getElementById('f-note').value='';
 
   // Show count confirm
   const cconfirm=document.getElementById('fg-count-confirm');
@@ -768,22 +952,23 @@ function pickChip(group,val){
   });
 }
 
-
 // ── Submit ────────────────────────────
 async function doSubmit(){
   const name=document.getElementById('f-name').value.trim();
   const phone=document.getElementById('f-phone').value.trim();
+  const age=document.getElementById('f-age').value.trim();
+  const fracture=chipVals['fracture']||'';
+  const spine=chipVals['spine']||'';
   const weekday=document.getElementById('f-weekday')?.value.trim()||'';
   const weekend=document.getElementById('f-weekend')?.value.trim()||'';
   const avail=[weekday?`平日：${weekday}`:'', weekend?`假日：${weekend}`:''].filter(Boolean).join('　');
   const note=document.getElementById('f-note').value.trim();
-  const count=chipVals['count']||'';
-  const op=chipVals['op']||'';
   const m=MASTERS[selM];
   const isReq=m?.type==='request';
 
   if(!name){toast('請輸入姓名','err');return;}
   if(!phone||!/^09\d{8}$/.test(phone)){toast('請輸入正確手機號碼','err');return;}
+  if(!age){toast('請輸入年齡','err');return;}
   if(isReq&&!weekday&&!weekend){toast('請填寫至少一個希望時段','err');return;}
 
   const btn=document.getElementById('sh-ok');
@@ -791,8 +976,9 @@ async function doSubmit(){
 
   // Build note string
   const noteArr=[];
-  if(count) noteArr.push(`人數：${count}`);
-  if(op) noteArr.push(`開刀：${op}`);
+  noteArr.push(`年齡：${age}歲`);
+  if(fracture) noteArr.push(`5年內骨折：${fracture}`);
+  if(spine) noteArr.push(`脊椎開刀：${spine}`);
   if(selectedDays.size) noteArr.push(`偏好：${[...selectedDays].join('/')}${avail?'  '+avail:''}`);
   else if(avail) noteArr.push(`時段：${avail}`);
   if(note) noteArr.push(note);
@@ -801,8 +987,8 @@ async function doSubmit(){
   try{
     let masterId=m?.id;
     let status='tentative';
-    let extraBooking=null; // for split mode
-    // Check if new customer (no previous bookings by phone)
+    let extraBooking=null;
+    // Check if new customer
     let isNewCustomer = false;
     if(phone){
       const existing = await sb(`/customers?phone=eq.${encodeURIComponent(phone)}&select=id&limit=1`).catch(()=>[]);
@@ -810,7 +996,6 @@ async function doSubmit(){
     }
 
     if(selM==='split'){
-      // Book both zhiwei and hongwen
       masterId=MASTERS.zhiwei.id;
       extraBooking={master_id:MASTERS.hongwen.id};
     } else if(selM==='auto'){
@@ -848,11 +1033,10 @@ async function doSubmit(){
       await sb('/bookings',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(bk)});
     }
 
-    // Save phone binding + update customers with LINE user ID
+    // Save phone binding + update customers
     if(profile?.userId){
       sb('/line_bindings',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
         body:JSON.stringify({line_user_id:profile.userId,phone,display_name:profile.displayName||name})}).catch(()=>{});
-      // Update customers table with line_user_id
       sb('/customers?phone=eq.'+encodeURIComponent(phone),{
         method:'PATCH',
         headers:{'Prefer':'return=minimal'},
@@ -860,11 +1044,14 @@ async function doSubmit(){
       }).catch(()=>{});
     }
 
+    // Save to localStorage
+    saveCustomerData();
+
     // Notify
     const mname=m?.name||'不指定';
     const msg=isReq
-      ? `📩 新預約申請\n師傅：${mname}\n姓名：${name}\n電話：${phone}\n${fullNote}\n\n請確認後通知客人`
-      : `📅 新預約通知\n師傅：${MNAME[masterId]||mname}\n日期：${selD} ${selT}\n姓名：${name}\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
+      ? `📩 新預約申請\n師傅：${mname}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}\n${fullNote}\n\n請確認後通知客人`
+      : `📅 新預約通知\n師傅：${MNAME[masterId]||mname}\n日期：${selD} ${selT}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
     await linePush(msg, masterId);
 
     closeForm();
@@ -902,67 +1089,9 @@ function reset(){
   document.getElementById('sec-date').style.display='none';
   document.getElementById('sec-time').style.display='none';
   document.getElementById('ctawrap').style.display='none';
+  document.getElementById('pg-book').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-// ── My bookings ───────────────────────
-async function loadMyBookings(){
-  const el=document.getElementById('mylist');
-  el.innerHTML='<div class="empty"><div class="spin" style="margin:0 auto"></div></div>';
-  if(!profile?.userId){el.innerHTML='<div class="empty">請先登入 LINE</div>';return;}
-  const bindings=await sb(`/line_bindings?line_user_id=eq.${profile.userId}`).catch(()=>[]);
-  const phone=bindings?.[0]?.phone;
-  if(!phone){el.innerHTML='<div class="empty" style="font-size:13px">完成第一次預約後<br>預約紀錄會顯示在這裡</div>';return;}
-  const today=new Date().toISOString().slice(0,10);
-  // 取得所有未結束/未取消的預約（包含「取消申請中」也要顯示給客人看）
-  const bks=await sb(`/bookings?customer_phone=eq.${phone}&date=gte.${today}&status=in.(confirmed,tentative,cancellation_requested)&order=date,start_time&limit=20`).catch(()=>[]);
-  if(!bks||!bks.length){el.innerHTML='<div class="empty">目前沒有即將到來的預約</div>';return;}
-  const now=new Date();
-  el.innerHTML=bks.map(b=>{
-    const d=new Date(b.date);
-    const stMap={confirmed:['st-ok','已確認'],tentative:['st-pend','待確認'],cancellation_requested:['st-cancel','取消申請中']};
-    const [sc,st]=stMap[b.status]||['st-ok','確認'];
-    // 判斷是否距離預約時間 24 小時以上（24 小時前可自助申請取消，24 小時內必須聯絡師傅）
-    const bkTime=new Date(`${b.date}T${b.start_time||'09:00:00'}`);
-    const hoursUntil=(bkTime-now)/(1000*60*60);
-    const canSelfCancel=hoursUntil>=24&&b.status!=='cancellation_requested';
-    const isPending=b.status==='cancellation_requested';
-    let actionBtns='';
-    if(isPending){
-      // 已申請取消，等師傅處理；不再顯示按鈕避免重複申請
-      actionBtns=`<div style="font-size:11px;color:var(--t2);margin-top:6px">⏳ 已送出取消申請，等待師傅確認</div>`;
-    }else if(canSelfCancel){
-      // 24h 前 → 自助申請取消
-      actionBtns=`<div style="display:flex;gap:6px;margin-top:6px">
-        <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid var(--cyan);color:var(--cyan);cursor:pointer;font-family:inherit">修改時間</button>
-        <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time?b.start_time.slice(0,5):''}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid var(--red);color:var(--red);cursor:pointer;font-family:inherit">申請取消</button>
-      </div>`;
-    }else{
-      // 24h 內 → 須直接聯絡師傅
-      actionBtns=`<div style="display:flex;gap:6px;margin-top:6px">
-        <button onclick="contactMasterToCancel('${b.master_id}','${b.date}','${b.start_time?b.start_time.slice(0,5):''}')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:none;border:1.5px solid #06c755;color:#06c755;cursor:pointer;font-family:inherit">💬 聯絡師傅</button>
-      </div>
-      <div style="font-size:10px;color:var(--t2);margin-top:4px">※ 24 小時內請直接聯絡師傅</div>`;
-    }
-    return `<div class="bk" id="bk-${b.id}">
-      <div class="bk-db"><div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div></div>
-      <div class="bk-info">
-        <div class="bk-time">${b.start_time.slice(0,5)}</div>
-        <div class="bk-mst">${MNAME[b.master_id]||''} 老師</div>
-        ${actionBtns}
-      </div>
-      <span class="bk-st ${sc}">${st}</span>
-    </div>`;
-  }).join('');
-}
-
-// ── Toast ─────────────────────────────
-function toast(msg,type){
-  const el=document.getElementById('toast');
-  el.textContent=msg;el.className='toast show '+(type||'');
-  setTimeout(()=>el.className='toast',2500);
-}
-
-// ── Go back ──────────────────────────
 function goBack(to){
   if(to==='master'){
     selM=null;selD=null;selT=null;
@@ -980,12 +1109,67 @@ function goBack(to){
   }
 }
 
-// ── Request cancellation (自助申請取消) ───
+async function loadMyBookings(){
+  try{
+    if(!profile?.userId) return;
+    const bookings=await sb(`/bookings?booking_source=eq.customer_app&order=date.desc,start_time.desc&limit=50`);
+    document.getElementById('mylist').innerHTML=renderBookings(bookings);
+  }catch(e){
+    document.getElementById('mylist').innerHTML='<div class="empty">載入失敗</div>';
+  }
+}
+
+function renderBookings(bookings){
+  if(!bookings?.length) return '<div class="empty">目前沒有預約</div>';
+  return bookings.map(b=>{
+    const d=new Date(b.date+'T00:00:00+08:00');
+    const sc=b.status==='confirmed'?'st-ok':b.status==='cancelled'?'st-cancel':'st-pend';
+    const st=b.status==='confirmed'?'✓ 已確認':b.status==='cancelled'?'✗ 已取消':'待確認';
+    let actionBtns='';
+    if(b.status==='tentative'){
+      actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
+        <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
+        <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
+      </div>`;
+    } else if(b.status==='confirmed'&&new Date(b.date+'T23:59:59')>new Date()){
+      const now=new Date();
+      const bkTime=new Date(b.date+'T'+b.start_time);
+      const diff=(bkTime-now)/60000;
+      if(diff>1440){
+        actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
+          <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
+          <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
+        </div>`;
+      }
+    }
+    if(diff<=1440&&b.status==='confirmed'){
+      actionBtns=`<div style="margin-top:6px">
+        <button onclick="contactMasterToCancel('${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">聯絡師傅</button>
+      </div>
+      <div style="font-size:10px;color:var(--t2);margin-top:4px">※ 24 小時內請直接聯絡師傅</div>`;
+    }
+    return `<div class="bk" id="bk-${b.id}">
+      <div class="bk-db"><div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div></div>
+      <div class="bk-info">
+        <div class="bk-time">${b.start_time.slice(0,5)}</div>
+        <div class="bk-mst">${MNAME[b.master_id]||''} 老師</div>
+        ${actionBtns}
+      </div>
+      <span class="bk-st ${sc}">${st}</span>
+    </div>`;
+  }).join('');
+}
+
+function toast(msg,type){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className='toast show '+(type||'');
+  setTimeout(()=>el.className='toast',2500);
+}
+
 async function requestCancellation(bookingId, masterId, date, time){
   const reason=(prompt('請簡單寫一下取消原因（可不填）：','')||'').trim();
   if(!confirm(`確定要申請取消 ${date} ${time} 的預約嗎？\n\n師傅看到後會處理，正式取消前你的時段仍會保留。`))return;
   try{
-    // 取得原本的 note 以便附加取消原因
     const cur=await sb(`/bookings?id=eq.${bookingId}&select=note`).catch(()=>[]);
     const oldNote=cur?.[0]?.note||'';
     const stamp=new Date().toLocaleString('zh-TW',{hour12:false}).replace(/\//g,'-');
@@ -996,7 +1180,6 @@ async function requestCancellation(bookingId, masterId, date, time){
       headers:{'Prefer':'return=minimal'},
       body:JSON.stringify({status:'cancellation_requested',note:newNote,last_edited_at:new Date().toISOString()})
     });
-    // 推 LINE 給師傅
     const msg=`❌ 客人申請取消預約\n日期：${date} ${time}\n${reason?`原因：${reason}\n`:''}\n請至師傅 app「📋 待確認 → 取消請求」處理`;
     await linePush(msg, masterId);
     toast('已送出取消申請','ok');
@@ -1007,23 +1190,18 @@ async function requestCancellation(bookingId, masterId, date, time){
   }
 }
 
-// ── Cancel booking ────────────────────
 async function contactMasterToCancel(masterId, date, time){
-  // Open LINE official account
   const lineUrl = 'https://line.me/R/oaMessage/@232hdfpl/?我想取消預約：' + encodeURIComponent(date + ' ' + time);
   window.open(lineUrl, '_blank');
 }
 
-// ── Modify booking ────────────────────
 function modifyBooking(id, masterId, date){
-  // Find master key
   const mkey = Object.keys(MASTERS).find(k=>MASTERS[k].id===masterId)||'auto';
   selM=mkey; selD=date; selT=null; modifyingId=id;
   document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
   document.getElementById('mc-'+mkey)?.classList.add('on');
   goPage('book');
   document.getElementById('sec-date').style.display='block';
-  // Select the date chip
   setTimeout(()=>{
     document.querySelectorAll('.dc').forEach(el=>{
       if(el.dataset.date===date) el.classList.add('on');
@@ -1039,7 +1217,6 @@ async function buildTimeSlots_modify(dateStr){
   document.getElementById('ctawrap').style.display='none';
   await prefetch(dateStr);
   renderSlots();
-  // Change CTA to say "修改"
   document.getElementById('ctabtn').textContent='確認修改時間 →';
   document.getElementById('ctabtn').onclick=openModifyConfirm;
 }
@@ -1070,7 +1247,6 @@ async function doModify(){
   }
 }
 
-// ── Success screen ────────────────────
 function showSuccess(isReq){
   const msg = isReq
     ? `感謝申請！🙏
@@ -1109,13 +1285,30 @@ function showSuccess(isReq){
   ov.classList.add('show');
 }
 
-// Close sheet on overlay click
+// 年齡輸入監聽
+document.addEventListener('input', function(e){
+  if(e.target.id === 'f-age'){
+    checkAgeWarning();
+  }
+  if(e.target.id === 'setup-age'){
+    checkSetupAgeWarning();
+  }
+});
 
 document.getElementById('sh-form').addEventListener('click',function(e){
   if(e.target===this) closeForm();
 });
-// Prevent sheet from closing when interacting with inputs
 document.querySelector('#sh-form .sheet').addEventListener('click',function(e){e.stopPropagation();});
+
+document.getElementById('sh-confirm').addEventListener('click',function(e){
+  if(e.target===this) document.getElementById('sh-confirm').classList.remove('show');
+});
+document.querySelector('#sh-confirm .sheet').addEventListener('click',function(e){e.stopPropagation();});
+
+document.getElementById('sh-first-setup').addEventListener('click',function(e){
+  // First setup modal cannot be closed by clicking outside
+});
+document.querySelector('#sh-first-setup .sheet').addEventListener('click',function(e){e.stopPropagation();});
 
 init();
 </script>
