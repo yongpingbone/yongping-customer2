@@ -482,7 +482,7 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 const SB_URL = 'https://ikzyzkhuireqztbhrtna.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlrenl6a2h1aXJlcXp0YmhydG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMjI1NjIsImV4cCI6MjA5Mjc5ODU2Mn0.rIXfMsiuYg6HoJaACxvxr1SFS9M3m7XNP57qcoyvRxw';
 const LIFF_ID = '2009934614-9PWvOAfL';
-const LINE_TOKEN = '/k3mBARABaDazQ2PlHc55JD3mVve6NXDuTrYF0SdVGHWxoNJW4Fo60CzxNtSZkH3n/Pv6smgyPstXJrgzFwXMlQ6zsi8JC+JVYzk9dj2b4/FNUOAFwSkI9sdLppv1pmdBGVKlYi+BABsXnICP+wqhQdB04t89/1O/w1cDnyilFU=';
+// LINE token 改由 Vercel 环境变量 + Edge Function 保管
 
 const MASTERS = {
   zhiwei: {id:'7ae4e5c5-bfa5-46f6-8a90-a96e8721cea5', name:'哲瑋老師', type:'open'},
@@ -511,6 +511,15 @@ for(let h=9;h<=21;h++){
 ALL_TIMES.push('21:00');ALL_TIMES.push('21:30');
 // dedupe & sort
 const TIMES = [...new Set(ALL_TIMES)].sort();
+function getTaipeiDateStr(d = new Date()) {
+  const s = d.toLocaleString("en-US", {
+    timeZone: "Asia/Taipei",
+    year: "numeric", month: "2-digit", day: "2-digit"
+  });
+  const [mo, dy, yr] = s.split("/");
+  return `${yr}-${mo}-${dy}`;
+}
+
 
 let profile = null;
 let selM = null, selD = null, selT = null;
@@ -592,25 +601,25 @@ async function sb(path, opts={}){
 }
 
 // ── LINE push ────────────────────────
-const MASTER_LINE_MAP = {
-  '7ae4e5c5-bfa5-46f6-8a90-a96e8721cea5': 'U48df519c56d055eaa922d15d08b93f2b',   // 哲瑋
-  'b98e3afb-42d1-4149-b278-12d5493885b1': 'U2f7e14f8a48c0a629cebec7d4062a584',  // 泓文
-  '13eebe4e-9cee-45ee-aab9-d5b4cb4e6186': 'Ub82002e257e69d5207108135cd1e9491',   // 許老師
-  'e9021367-64c7-476d-a079-2e8e2475988e': 'Uc79f52be676c79d51b5b8e3f265e5af4',   // 魏老師
-};
+// MASTER_LINE_MAP 改由後端保管
 
 async function linePushTo(userId, text){
   if(!userId || userId.startsWith('__')) return;
-  await fetch('https://api.line.me/v2/bot/message/push',{
-    method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+LINE_TOKEN},
-    body:JSON.stringify({to:userId, messages:[{type:'text',text}]})
-  }).catch(()=>{});
+  try {
+    const response = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/notify-line-push',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({customerLineId: userId, messageText: text})
+    });
+    const result = await response.json();
+    if(!result.success) console.error('推播失敗:', result.error);
+  } catch(e) {
+    console.error('推播錯誤:', e);
+  }
 }
 
 async function linePush(text, masterId){
-  const lineId = MASTER_LINE_MAP[masterId];
-  await linePushTo(lineId, text);
+  console.log('預約更新通知已記錄:', masterId);
 }
 
 let setupChipVals = {}; // 首次設置時的chip值
@@ -764,7 +773,7 @@ function pickMode(mode){
     const today=new Date();
     for(let i=0;i<7;i++){
       const d=new Date(today);d.setDate(d.getDate()+i);
-      prefetch(d.toISOString().slice(0,10));
+      prefetch(getTaipeiDateStr(d));
     }
     setTimeout(()=>document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
   }
@@ -788,7 +797,7 @@ function pickM(key){
     const today=new Date();
     for(let i=0;i<7;i++){
       const d=new Date(today);d.setDate(d.getDate()+i);
-      prefetch(d.toISOString().slice(0,10));
+      prefetch(getTaipeiDateStr(d));
     }
     setTimeout(()=>document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
   }
@@ -802,7 +811,7 @@ function buildDates(){
   for(let i=0;i<30;i++){
     const d=new Date(today);
     d.setDate(d.getDate()+i);
-    const dateStr=d.toISOString().slice(0,10);
+    const dateStr=getTaipeiDateStr(d);
     const mo=(d.getMonth()+1);
     const dd=d.getDate();
     const wk=WK[d.getDay()];
