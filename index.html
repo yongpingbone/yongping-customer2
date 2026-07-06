@@ -665,7 +665,7 @@ async function completeFirstSetup(){
 
   // Save to Supabase line_bindings
   if(profile?.userId){
-    sb('/line_bindings',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
+    sb('/line_bindings?on_conflict=line_user_id',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
       body:JSON.stringify({
         line_user_id:profile.userId,
         phone:phone,
@@ -690,7 +690,7 @@ async function init(){
     document.getElementById('uname').textContent = profile.displayName;
 
     // save line binding
-    sb('/line_bindings',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
+    sb('/line_bindings?on_conflict=line_user_id',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
       body:JSON.stringify({line_user_id:profile.userId,display_name:profile.displayName})}).catch(()=>{});
 
     // Check if customer data exists
@@ -1044,7 +1044,7 @@ async function doSubmit(){
 
     // Save phone binding + update customers
     if(profile?.userId){
-      sb('/line_bindings',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
+      sb('/line_bindings?on_conflict=line_user_id',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
         body:JSON.stringify({line_user_id:profile.userId,phone,display_name:profile.displayName||name})}).catch(()=>{});
       sb('/customers?phone=eq.'+encodeURIComponent(phone),{
         method:'PATCH',
@@ -1120,8 +1120,17 @@ function goBack(to){
 
 async function loadMyBookings(){
   try{
-    if(!profile?.userId) return;
-    const bookings=await sb(`/bookings?booking_source=eq.customer_app&order=date.desc,start_time.desc&limit=50`);
+    if(!profile?.userId){
+      document.getElementById('mylist').innerHTML='<div class="empty">請先登入 LINE</div>';
+      return;
+    }
+    const bindings=await sb(`/line_bindings?line_user_id=eq.${profile.userId}&select=phone&limit=1`).catch(()=>[]);
+    const phone=bindings?.[0]?.phone;
+    if(!phone){
+      document.getElementById('mylist').innerHTML='<div class="empty" style="font-size:13px">完成第一次預約後<br>預約紀錄會顯示在這裡</div>';
+      return;
+    }
+    const bookings=await sb(`/bookings?customer_phone=eq.${encodeURIComponent(phone)}&order=date.desc,start_time.desc&limit=50`);
     document.getElementById('mylist').innerHTML=renderBookings(bookings);
   }catch(e){
     document.getElementById('mylist').innerHTML='<div class="empty">載入失敗</div>';
