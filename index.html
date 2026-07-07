@@ -4,10 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>永平整復保健 線上預約</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
 <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
 :root{
   --bg:#0a0a14;--bg2:#11111e;--bg3:#181828;--border:#252538;
   --text:#eeeef5;--t2:#777799;--cyan:#00e5e5;--cdim:rgba(0,229,229,.1);
@@ -58,6 +60,21 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 .d-mo{font-size:10px;color:var(--t2)}
 .d-num{font-size:19px;font-weight:900;line-height:1.1}
 .d-wk{font-size:10px;color:var(--t2)}
+
+/* Calendar */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-nav{background:none;border:1.5px solid var(--border);color:var(--text);border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer;font-family:inherit}
+.cal-nav:disabled{opacity:.3;cursor:default}
+.cal-title{font-size:15px;font-weight:900}
+.cal-wk-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+.cal-wk-lbl{text-align:center;font-size:11px;color:var(--t2);padding:4px 0}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:10px;background:var(--bg2);border:1.5px solid var(--border);cursor:pointer;user-select:none;font-size:14px;font-weight:700}
+.cal-cell.empty{background:none;border:none;cursor:default}
+.cal-cell.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan)}
+.cal-cell.disabled{opacity:.3;pointer-events:none}
+.cal-cell.closed{border-color:var(--red);color:var(--red);opacity:.6}
+.cal-tag{font-size:8px;margin-top:1px}
 
 /* Time */
 .tgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
@@ -263,7 +280,13 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
           <div class="lbl" style="margin-bottom:0">選擇日期</div>
           <button onclick="goBack('master')" style="background:none;border:1.5px solid var(--border);color:var(--t2);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit">← 重選師傅</button>
         </div>
-        <div class="drow" id="drow"></div>
+        <div class="cal-head">
+          <button class="cal-nav" id="calPrev" onclick="calNav(-1)">‹</button>
+          <div class="cal-title" id="calTitle"></div>
+          <button class="cal-nav" id="calNext" onclick="calNav(1)">›</button>
+        </div>
+        <div class="cal-wk-row" id="calWkRow"></div>
+        <div class="cal-grid" id="calGrid"></div>
       </div>
 
       <div class="sec" id="sec-time" style="display:none">
@@ -552,6 +575,22 @@ let selCount = 1;
 let selMode = 'single'; // 'single', 'same', 'split'
 let chipVals = {};
 let slotCache = {}; // date+masterKey -> booked set
+let availCache = {}; // date -> { master_id: {isOpen, openSlots:Set|null} } 師傅開放設定（白名單）
+let closureCache = []; // [{start_date,end_date,reason}] 店休區間
+
+async function loadStoreClosures(){
+  try{
+    const rows = await sb('/store_closures?select=start_date,end_date,reason&order=start_date.asc');
+    closureCache = rows || [];
+  }catch(e){ closureCache = []; }
+}
+function isDateClosed(dateStr){
+  return closureCache.some(c=> dateStr >= c.start_date && dateStr <= c.end_date);
+}
+function closureReasonFor(dateStr){
+  const c = closureCache.find(c=> dateStr >= c.start_date && dateStr <= c.end_date);
+  return c?.reason || '';
+}
 let selectedDays = new Set();
 
 // ────────────────────────────────────────
@@ -644,7 +683,18 @@ async function linePushTo(userId, text){
 }
 
 async function linePush(text, masterId){
-  console.log('預約更新通知已記錄:', masterId);
+  if(!masterId) return;
+  try{
+    const response = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/notify-master-line',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({masterId, messageText: text})
+    });
+    const result = await response.json().catch(()=>({}));
+    if(!result.success && !result.skipped) console.error('師傅通知推播失敗:', result.error);
+  }catch(e){
+    console.error('師傅通知推播錯誤:', e);
+  }
 }
 
 let setupChipVals = {}; // 首次設置時的chip值
@@ -735,10 +785,15 @@ async function init(){
   }
   buildDates();
   await loadRestTimes();
+  await loadStoreClosures();
+  buildDates(); // 店休資料到齊後重畫一次日期橫條，才會正確顯示「店休」
   document.getElementById('loader').style.display='none';
   const app=document.getElementById('app');
   app.style.display='flex';
   loadMyBookings();
+  // 深連結：從 LINE 確認訊息點進來 → 跳到我的預約並自動觸發確認
+  const _cid=getConfirmParam();
+  if(_cid){ goPage('my'); setTimeout(()=>confirmBookingByCustomer(_cid),900); }
 }
 
 // ── Page nav ─────────────────────────
@@ -796,6 +851,7 @@ function pickMode(mode){
     selM = 'split';
     document.getElementById('sec-date').style.display='block';
     buildDates();
+    refreshDateAvailability('split');
     const today=new Date();
     for(let i=0;i<7;i++){
       const d=new Date(today);d.setDate(d.getDate()+i);
@@ -820,6 +876,7 @@ function pickM(key){
   } else {
     document.getElementById('sec-date').style.display='block';
     buildDates();
+    refreshDateAvailability(key);
     const today=new Date();
     for(let i=0;i<7;i++){
       const d=new Date(today);d.setDate(d.getDate()+i);
@@ -830,47 +887,173 @@ function pickM(key){
 }
 
 // ── Build dates ───────────────────────
+let calYear, calMonth; // 目前檢視的月曆年/月（calMonth 0-indexed）
+(function initCalState(){
+  const d=new Date();
+  calYear=d.getFullYear(); calMonth=d.getMonth();
+})();
+
+function fmtDateYMD(y,m,day){
+  return `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
 function buildDates(){
-  const drow=document.getElementById('drow');
-  drow.innerHTML='';
-  const today=new Date();
-  for(let i=0;i<30;i++){
-    const d=new Date(today);
-    d.setDate(d.getDate()+i);
-    const dateStr=getTaipeiDateStr(d);
-    const mo=(d.getMonth()+1);
-    const dd=d.getDate();
-    const wk=WK[d.getDay()];
-    const dc=document.createElement('div');
-    dc.className='dc';
-    dc.dataset.date=dateStr;
-    dc.innerHTML=`<div class="d-mo">${mo}月</div><div class="d-num">${dd}</div><div class="d-wk">週${wk}</div>`;
-    dc.onclick=()=>pickDate(dateStr);
-    drow.appendChild(dc);
+  renderCalendar();
+}
+
+function renderCalendar(){
+  const title=document.getElementById('calTitle');
+  const wkRow=document.getElementById('calWkRow');
+  const grid=document.getElementById('calGrid');
+  if(!title||!grid) return;
+  title.textContent=`${calYear} 年 ${calMonth+1} 月`;
+
+  if(!wkRow.dataset.built){
+    wkRow.innerHTML=WK.map(w=>`<div class="cal-wk-lbl">週${w}</div>`).join('');
+    wkRow.dataset.built='1';
   }
+
+  const today=new Date();
+  const todayStr=getTaipeiDateStr(today);
+  const isCurrentMonth = (calYear===today.getFullYear() && calMonth===today.getMonth());
+  document.getElementById('calPrev').disabled = isCurrentMonth;
+
+  const firstDay=new Date(calYear,calMonth,1).getDay();
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  const cells=[];
+  for(let i=0;i<firstDay;i++) cells.push(null);
+  for(let d=1;d<=daysInMonth;d++) cells.push(d);
+
+  grid.innerHTML='';
+  cells.forEach(day=>{
+    const cell=document.createElement('div');
+    if(day===null){
+      cell.className='cal-cell empty';
+      grid.appendChild(cell);
+      return;
+    }
+    const dateStr=fmtDateYMD(calYear,calMonth,day);
+    const dow=new Date(calYear,calMonth,day).getDay();
+    const isPast = dateStr < todayStr;
+    const closed = isDateClosed(dateStr);
+    const isSun = dow===0;
+    cell.className='cal-cell';
+    cell.dataset.date=dateStr;
+
+    if(isPast){
+      cell.classList.add('disabled');
+      cell.innerHTML=`${day}`;
+    } else if(closed){
+      cell.classList.add('closed');
+      cell.innerHTML=`${day}<div class="cal-tag">店休</div>`;
+      cell.title=closureReasonFor(dateStr)||'店休';
+    } else if(isSun){
+      cell.classList.add('disabled');
+      cell.innerHTML=`${day}<div class="cal-tag">電洽</div>`;
+      cell.title='週日僅接受電話或現場登記，不開放線上預約';
+    } else {
+      cell.innerHTML=`${day}`;
+      cell.onclick=()=>pickDate(dateStr);
+      if(selD===dateStr) cell.classList.add('on');
+    }
+    grid.appendChild(cell);
+  });
+}
+
+async function calNav(delta){
+  calMonth+=delta;
+  if(calMonth<0){ calMonth=11; calYear--; }
+  if(calMonth>11){ calMonth=0; calYear++; }
+  renderCalendar();
+  if(selM) await refreshDateAvailability(selM);
 }
 
 function pickDate(dateStr){
   selD=dateStr; selT=null;
-  document.querySelectorAll('.dc').forEach(el=>el.classList.remove('on'));
-  document.querySelector(`[data-date="${dateStr}"]`)?.classList.add('on');
+  document.querySelectorAll('.cal-cell').forEach(el=>el.classList.remove('on'));
+  document.querySelector(`.cal-cell[data-date="${dateStr}"]`)?.classList.add('on');
   document.getElementById('sec-time').style.display='block';
   prefetch(dateStr);
   setTimeout(()=>document.getElementById('sec-time').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
 }
 
 async function prefetch(dateStr){
-  if(slotCache[dateStr]) return;
+  if(slotCache[dateStr]){ if(selD===dateStr) renderSlots(); return; }
   try{
-    const rows=await sb(`/bookings?date=eq.${dateStr}&select=id,master_id,start_time,status`);
+    const [rows, availRows] = await Promise.all([
+      sb(`/bookings?date=eq.${dateStr}&status=neq.cancelled&status=neq.no_show&select=id,master_id,start_time,status`),
+      sb(`/master_day_availability?date=eq.${dateStr}&select=master_id,is_open,open_slots`)
+    ]);
     slotCache[dateStr]=rows||[];
+    const am={};
+    (availRows||[]).forEach(r=>{
+      am[r.master_id]={isOpen:!!r.is_open, openSlots:(Array.isArray(r.open_slots)&&r.open_slots.length)?new Set(r.open_slots):null};
+    });
+    availCache[dateStr]=am;
     if(selD===dateStr) renderSlots();
   }catch(e){}
+}
+
+// 某師傅在某天某時段是否「已被開放」（白名單：沒被開放過就是不可約）
+function isSlotOpen(dateStr, masterKey, t){
+  const am=availCache[dateStr]||{};
+  const openFor=(mid)=>{
+    const r=am[mid];
+    return !!(r && r.isOpen && (r.openSlots===null || r.openSlots.has(t)));
+  };
+  if(masterKey==='split') return openFor(MASTERS.zhiwei.id) && openFor(MASTERS.hongwen.id);
+  if(masterKey==='auto') return openFor(MASTERS.zhiwei.id) || openFor(MASTERS.hongwen.id);
+  return openFor(MASTERS[masterKey]?.id);
+}
+
+// 某師傅在某天「整天」是否至少有開放（給日期橫條變暗用，不看細部時段）
+function isDayOpenAtAll(dateStr, masterKey){
+  const am=availCache[dateStr]||{};
+  const dayOpen=(mid)=> !!(am[mid] && am[mid].isOpen);
+  if(masterKey==='split') return dayOpen(MASTERS.zhiwei.id) && dayOpen(MASTERS.hongwen.id);
+  if(masterKey==='auto') return dayOpen(MASTERS.zhiwei.id) || dayOpen(MASTERS.hongwen.id);
+  return dayOpen(MASTERS[masterKey]?.id);
+}
+
+// 選定師傅（或不指定/拆單）後，查目前月曆所在月份的開放設定，把沒開放的日子鎖住
+async function refreshDateAvailability(masterKey){
+  const grid=document.getElementById('calGrid');
+  if(!grid) return;
+  const minD=fmtDateYMD(calYear,calMonth,1);
+  const lastDay=new Date(calYear,calMonth+1,0).getDate();
+  const maxD=fmtDateYMD(calYear,calMonth,lastDay);
+  try{
+    const rows=await sb(`/master_day_availability?date=gte.${minD}&date=lte.${maxD}&select=master_id,date,is_open,open_slots`);
+    const byDate={};
+    (rows||[]).forEach(r=>{
+      byDate[r.date]=byDate[r.date]||{};
+      byDate[r.date][r.master_id]={isOpen:!!r.is_open, openSlots:(Array.isArray(r.open_slots)&&r.open_slots.length)?new Set(r.open_slots):null};
+    });
+    const dates=[...grid.querySelectorAll('.cal-cell[data-date]')].map(el=>el.dataset.date);
+    dates.forEach(d=>{ availCache[d]={...(availCache[d]||{}), ...(byDate[d]||{})}; });
+  }catch(e){ return; } // 查詢失敗就不動畫面，避免整個約不到（保守起見不因網路錯誤鎖死）
+  grid.querySelectorAll('.cal-cell[data-date]').forEach(el=>{
+    const d=el.dataset.date;
+    if(el.classList.contains('closed')||el.classList.contains('disabled')) return; // 店休/週日/過去，維持原樣不覆蓋
+    const ok = isDayOpenAtAll(d, masterKey);
+    el.classList.toggle('disabled', !ok);
+    el.onclick = ok ? ()=>pickDate(d) : null;
+  });
 }
 
 function renderSlots(){
   const tgrid=document.getElementById('tgrid');
   tgrid.innerHTML='';
+  if(isDateClosed(selD)){
+    tgrid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--red);font-size:13px">店休期間，暫停預約${closureReasonFor(selD)?'（'+closureReasonFor(selD)+'）':''}</div>`;
+    document.getElementById('ctawrap').style.display='none';
+    return;
+  }
+  if(new Date(selD+'T00:00:00').getDay()===0){
+    tgrid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--t2);font-size:13px">週日僅接受電話或現場登記，請直接聯絡師傅預約</div>`;
+    document.getElementById('ctawrap').style.display='none';
+    return;
+  }
   const rows=slotCache[selD]||[];
   TIMES.forEach(t=>{
     const ts=document.createElement('button');
@@ -893,6 +1076,10 @@ function renderSlots(){
     if(isTaken){
       ts.className+=' full';
       ts.textContent='已滿';
+      ts.onclick=null;
+    }else if(!isSlotOpen(selD,selM,t)){
+      ts.className+=' full';
+      ts.textContent='未開放';
       ts.onclick=null;
     }else if(isRest){
       ts.className+=' full';
@@ -1121,6 +1308,13 @@ async function doSubmit(){
         body:JSON.stringify({line_user_id:profile.userId})
       }).catch(()=>{});
     }
+    // 建立/更新 customers 主檔（真正的新到訪次數，跟師傅 app 共用同一支資料庫函式）
+    // 這裡原本完全沒有寫入 customers 表，代表只透過線上預約的客人永遠不會被判斷成「舊客」
+    if(phone){
+      sb('/rpc/upsert_customer_visit',{method:'POST',
+        body:JSON.stringify({p_phone:phone,p_name:name,p_visit_date:getTaipeiDateStr()})
+      }).catch(()=>{});
+    }
 
     // Save to localStorage
     saveCustomerData();
@@ -1131,6 +1325,11 @@ async function doSubmit(){
       ? `📩 新預約申請\n師傅：${mname}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}\n${fullNote}\n\n請確認後通知客人`
       : `📅 新預約通知\n師傅：${MNAME[masterId]||mname}\n日期：${selD} ${selT}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
     await linePush(msg, masterId);
+    // 拆單（兩位師傅合診）：兩位都要各自收到通知，不能只通知主筆那位
+    if(selM==='split'){
+      const msg2=`📅 新預約通知（合診）\n師傅：${MNAME[MASTERS.hongwen.id]}\n日期：${selD} ${selT}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
+      await linePush(msg2, MASTERS.hongwen.id);
+    }
 
     closeForm();
     showSuccess(isReq);
@@ -1180,7 +1379,7 @@ function goBack(to){
     document.getElementById('pg-book').scrollIntoView({behavior:'smooth',block:'start'});
   } else if(to==='date'){
     selD=null;selT=null;
-    document.querySelectorAll('.dc').forEach(el=>el.classList.remove('on'));
+    document.querySelectorAll('.cal-cell').forEach(el=>el.classList.remove('on'));
     document.getElementById('sec-time').style.display='none';
     document.getElementById('ctawrap').style.display='none';
     document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -1250,10 +1449,29 @@ function renderBookings(bookings){
     const hasSlot=!!(b.date&&b.start_time);
     const d=hasSlot?new Date(b.date+'T00:00:00+08:00'):null;
     const timeLabel=hasSlot?b.start_time.slice(0,5):'（申請制，等待師傅安排）';
-    const sc=b.status==='confirmed'?'st-ok':b.status==='cancelled'?'st-cancel':'st-pend';
-    const st=b.status==='confirmed'?'✓ 已確認':b.status==='cancelled'?'✗ 已取消':'待確認';
+    let sc=b.status==='confirmed'?'st-ok':b.status==='cancelled'?'st-cancel':'st-pend';
+    let st=b.status==='confirmed'?'✓ 已確認':b.status==='cancelled'?'✗ 已取消':'待確認';
     let actionBtns='';
     let diff=Infinity;
+    // ── 待客人二次確認：師傅已排定時段，客人需於 2 小時內確認 ──
+    if(b.status==='awaiting_customer'){
+      const dl=b.confirm_deadline?new Date(b.confirm_deadline):null;
+      const expired=dl&&dl.getTime()<Date.now();
+      if(expired){
+        sc='st-cancel'; st='✗ 已逾時';
+      }else{
+        sc='st-pend'; st='⏰ 待你確認';
+        const mins=dl?Math.max(0,Math.round((dl.getTime()-Date.now())/60000)):null;
+        const cd=mins!=null?(mins>=60?`約 ${Math.floor(mins/60)} 小時 ${mins%60} 分`:`約 ${mins} 分鐘`):'時間';
+        actionBtns=`<div style="margin-top:8px">
+          <button onclick="confirmBookingByCustomer('${b.id}')" style="width:100%;background:var(--cyan);border:none;color:#00171f;border-radius:8px;padding:11px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">✓ 確認這個預約時間</button>
+        </div>
+        <div style="font-size:11px;color:var(--red);margin-top:6px;font-weight:700">⏰ 請於 ${cd}內確認，逾時時段會自動釋出</div>
+        <div style="margin-top:6px">
+          <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${hasSlot?b.start_time.slice(0,5):''}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">不能來，取消</button>
+        </div>`;
+      }
+    }
     if(b.status==='tentative'&&hasSlot){
       actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
         <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
@@ -1294,6 +1512,41 @@ function toast(msg,type){
   setTimeout(()=>el.className='toast',2500);
 }
 
+// 深連結解析：支援 ?confirm=<id> 或 LIFF 包裝的 liff.state
+function getConfirmParam(){
+  try{
+    const sp=new URLSearchParams(location.search);
+    if(sp.get('confirm')) return sp.get('confirm');
+    const stt=sp.get('liff.state');
+    if(stt){
+      const inner=new URLSearchParams(stt.charAt(0)==='?'?stt.slice(1):stt);
+      if(inner.get('confirm')) return inner.get('confirm');
+    }
+  }catch(e){}
+  return null;
+}
+
+// 客人二次確認：呼叫 Edge Function（驗 LINE idToken → 整組改 confirmed）
+async function confirmBookingByCustomer(id){
+  if(!confirm('確認這個預約時間嗎？\n確認後即完成預約。'))return;
+  try{
+    const idToken = liff.getIDToken ? liff.getIDToken() : null;
+    if(!idToken){toast('請重新登入 LINE 後再試','err');return;}
+    const resp = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/customer-confirm-booking',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({idToken, bookingId:id})
+    });
+    const result = await resp.json();
+    if(!result.success){toast(result.error||'確認失敗，請再試一次','err');loadMyBookings();return;}
+    toast('預約已確認！🎉','ok');
+    loadMyBookings();
+  }catch(e){
+    console.error(e);
+    toast('確認失敗，請再試一次','err');
+  }
+}
+
 async function requestCancellation(bookingId, masterId, date, time){
   const reason=(prompt('請簡單寫一下取消原因（可不填）：','')||'').trim();
   if(!confirm(`確定要申請取消 ${date} ${time} 的預約嗎？\n\n師傅看到後會處理，正式取消前你的時段仍會保留。`))return;
@@ -1329,8 +1582,12 @@ function modifyBooking(id, masterId, date){
   document.getElementById('mc-'+mkey)?.classList.add('on');
   goPage('book');
   document.getElementById('sec-date').style.display='block';
-  setTimeout(()=>{
-    document.querySelectorAll('.dc').forEach(el=>{
+  const [dy,dm]=date.split('-').map(Number);
+  calYear=dy; calMonth=dm-1;
+  setTimeout(async ()=>{
+    renderCalendar();
+    await refreshDateAvailability(mkey);
+    document.querySelectorAll('.cal-cell').forEach(el=>{
       if(el.dataset.date===date) el.classList.add('on');
     });
     buildTimeSlots_modify(date);
