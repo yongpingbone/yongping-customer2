@@ -495,6 +495,27 @@ const MASTERS = {
   zhi:    {id:'e9021367-64c7-476d-a079-2e8e2475988e', name:'魏老師',   type:'request'},
   auto:   {id:null, name:'不指定', type:'auto'},
 };
+
+// ── 師傅休息時段（從 master_rest_times 讀取，客人預約時擋掉）──
+// REST_BY_MASTER: { master_id: Set(times) }
+const REST_BY_MASTER = {};
+async function loadRestTimes(){
+  try{
+    const rows = await sb('/master_rest_times?select=master_id,rest_times');
+    (rows||[]).forEach(r=>{
+      REST_BY_MASTER[r.master_id] = new Set(Array.isArray(r.rest_times)?r.rest_times:[]);
+    });
+  }catch(e){/* 讀取失敗就不擋，維持原本行為，不影響預約 */}
+}
+// 某師傅在某時段是否休息（週日不套用，與師傅端一致）
+function isRestSlot(masterId, dateStr, t){
+  if(!masterId) return false;
+  // 週日(0)不套用休息時段
+  const dt = new Date(dateStr+'T00:00:00');
+  if(dt.getDay()===0) return false;
+  const set = REST_BY_MASTER[masterId];
+  return set ? set.has(t) : false;
+}
 const MNAME = {
   '7ae4e5c5-bfa5-46f6-8a90-a96e8721cea5':'哲瑋老師',
   'b98e3afb-42d1-4149-b278-12d5493885b1':'泓文老師',
@@ -713,6 +734,7 @@ async function init(){
     document.getElementById('uname').textContent='訪客';
   }
   buildDates();
+  await loadRestTimes();
   document.getElementById('loader').style.display='none';
   const app=document.getElementById('app');
   app.style.display='flex';
@@ -858,9 +880,23 @@ function renderSlots(){
       const mid=MASTERS[selM]?.id;
       return b.master_id===mid&&b.start_time.slice(0,5)===t;
     });
+    // 休息時段判斷：split 需兩位師傅都非休息才可約；其餘看該師傅
+    let isRest=false;
+    if(selM==='split'){
+      isRest = isRestSlot(MASTERS.zhiwei.id,selD,t) || isRestSlot(MASTERS.hongwen.id,selD,t);
+    }else if(selM==='auto'){
+      // 不指定：兩位開放師傅都休息才算休息（否則系統可派給沒休息的那位）
+      isRest = isRestSlot(MASTERS.zhiwei.id,selD,t) && isRestSlot(MASTERS.hongwen.id,selD,t);
+    }else{
+      isRest = isRestSlot(MASTERS[selM]?.id,selD,t);
+    }
     if(isTaken){
       ts.className+=' full';
       ts.textContent='已滿';
+      ts.onclick=null;
+    }else if(isRest){
+      ts.className+=' full';
+      ts.textContent='休息';
       ts.onclick=null;
     }else{
       ts.textContent=t;
@@ -995,11 +1031,13 @@ async function doSubmit(){
       const zwTaken=rows.some(b=>b.master_id===MASTERS.zhiwei.id&&b.start_time.slice(0,5)===selT);
       const hwTaken=rows.some(b=>b.master_id===MASTERS.hongwen.id&&b.start_time.slice(0,5)===selT);
       if(zwTaken||hwTaken){toast('該時段已滿，請重新選擇','err');return;}
+      if(isRestSlot(MASTERS.zhiwei.id,selD,selT)||isRestSlot(MASTERS.hongwen.id,selD,selT)){toast('該時段為師傅休息時間，請重新選擇','err');return;}
     } else if(selM!=='auto'){
       const mid=MASTERS[selM]?.id;
       if(rows.some(b=>b.master_id===mid&&b.start_time.slice(0,5)===selT)){
         toast('該時段已被預約，請重新選擇','err');return;
       }
+      if(isRestSlot(mid,selD,selT)){toast('該時段為師傅休息時間，請重新選擇','err');return;}
     }
   }
 
