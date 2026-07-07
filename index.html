@@ -1126,6 +1126,9 @@ function goBack(to){
   }
 }
 
+let currentPhone = null;
+let bookingsSubscription = null;
+
 async function loadMyBookings(){
   try{
     if(!profile?.userId){
@@ -1140,9 +1143,30 @@ async function loadMyBookings(){
     }
     const bookings=await sb(`/bookings?customer_phone=eq.${encodeURIComponent(phone)}&order=date.desc,start_time.desc&limit=50`);
     document.getElementById('mylist').innerHTML=renderBookings(bookings);
+    
+    // 設定 Realtime 訂閱（只在電話號碼改變時重新訂閱）
+    if(currentPhone !== phone){
+      if(bookingsSubscription) bookingsSubscription.unsubscribe();
+      currentPhone = phone;
+      setupRealtimeSubscription(phone);
+    }
   }catch(e){
     document.getElementById('mylist').innerHTML='<div class="empty">載入失敗</div>';
   }
+}
+
+function setupRealtimeSubscription(phone){
+  // 訂閱 bookings 表，監聽該客人的所有預約變動
+  bookingsSubscription = sb.channel(`bookings:customer_phone=eq.${encodeURIComponent(phone)}`)
+    .on('postgres_changes',
+      {event:'*', schema:'public', table:'bookings', filter:`customer_phone=eq.${encodeURIComponent(phone)}`},
+      (payload)=>{
+        console.log('預約即時更新:', payload);
+        // 重新載入該客人的預約列表
+        loadMyBookings();
+      }
+    )
+    .subscribe();
 }
 
 function renderBookings(bookings){
