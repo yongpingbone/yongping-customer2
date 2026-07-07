@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>永平整復保健 線上預約</title>
 <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
 :root{
@@ -482,6 +483,9 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 const SB_URL = 'https://ikzyzkhuireqztbhrtna.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlrenl6a2h1aXJlcXp0YmhydG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMjI1NjIsImV4cCI6MjA5Mjc5ODU2Mn0.rIXfMsiuYg6HoJaACxvxr1SFS9M3m7XNP57qcoyvRxw';
 const LIFF_ID = '2009934614-9PWvOAfL';
+
+// 真正的 Supabase client，供 Realtime 訂閱使用
+const supabaseClient = window.supabase.createClient(SB_URL, SB_KEY);
 // LINE token 改由 Vercel 环境变量 + Edge Function 保管
 
 const MASTERS = {
@@ -980,6 +984,25 @@ async function doSubmit(){
   if(!age){toast('請輸入年齡','err');return;}
   if(isReq&&!weekday&&!weekend){toast('請填寫至少一個希望時段','err');return;}
 
+  // 🔴 防呆：非申請制預約，提交前重新查一次即時資料，確認時段可用
+  if(!isReq && selD && selT){
+    try{
+      const fresh=await sb(`/bookings?date=eq.${selD}&status=neq.cancelled&select=master_id,start_time`);
+      slotCache[selD]=fresh||[];
+    }catch(e){}
+    const rows=slotCache[selD]||[];
+    if(selM==='split'){
+      const zwTaken=rows.some(b=>b.master_id===MASTERS.zhiwei.id&&b.start_time.slice(0,5)===selT);
+      const hwTaken=rows.some(b=>b.master_id===MASTERS.hongwen.id&&b.start_time.slice(0,5)===selT);
+      if(zwTaken||hwTaken){toast('該時段已滿，請重新選擇','err');return;}
+    } else if(selM!=='auto'){
+      const mid=MASTERS[selM]?.id;
+      if(rows.some(b=>b.master_id===mid&&b.start_time.slice(0,5)===selT)){
+        toast('該時段已被預約，請重新選擇','err');return;
+      }
+    }
+  }
+
   const btn=document.getElementById('sh-ok');
   btn.disabled=true; btn.textContent='處理中...';
 
@@ -1127,7 +1150,7 @@ function goBack(to){
 }
 
 let currentPhone = null;
-let bookingsSubscription = null;
+let bookingsChannel = null;
 
 async function loadMyBookings(){
   try{
@@ -1143,10 +1166,9 @@ async function loadMyBookings(){
     }
     const bookings=await sb(`/bookings?customer_phone=eq.${encodeURIComponent(phone)}&order=date.desc,start_time.desc&limit=50`);
     document.getElementById('mylist').innerHTML=renderBookings(bookings);
-    
-    // 設定 Realtime 訂閱（只在電話號碼改變時重新訂閱）
+
+    // 設定 Realtime 訂閱（只在電話號碼首次確定時建立一次）
     if(currentPhone !== phone){
-      if(bookingsSubscription) bookingsSubscription.unsubscribe();
       currentPhone = phone;
       setupRealtimeSubscription(phone);
     }
@@ -1156,17 +1178,32 @@ async function loadMyBookings(){
 }
 
 function setupRealtimeSubscription(phone){
-  // 訂閱 bookings 表，監聽該客人的所有預約變動
-  bookingsSubscription = sb.channel(`bookings:customer_phone=eq.${encodeURIComponent(phone)}`)
+  // 移除舊訂閱
+  if(bookingsChannel){
+    supabaseClient.removeChannel(bookingsChannel);
+    bookingsChannel=null;
+  }
+  // 用真正的 Supabase client 訂閱 bookings 表變動
+  bookingsChannel = supabaseClient
+    .channel('my-bookings-'+phone)
     .on('postgres_changes',
-      {event:'*', schema:'public', table:'bookings', filter:`customer_phone=eq.${encodeURIComponent(phone)}`},
+      {event:'*', schema:'public', table:'bookings', filter:`customer_phone=eq.${phone}`},
       (payload)=>{
-        console.log('預約即時更新:', payload);
-        // 重新載入該客人的預約列表
-        loadMyBookings();
+        console.log('預約即時更新:', payload.eventType, payload);
+        refreshBookingsList(phone);
       }
     )
-    .subscribe();
+    .subscribe((status)=>{
+      console.log('Realtime 訂閱狀態:', status);
+    });
+}
+
+// 只刷新列表，不重建訂閱（避免無限迴圈）
+async function refreshBookingsList(phone){
+  try{
+    const bookings=await sb(`/bookings?customer_phone=eq.${encodeURIComponent(phone)}&order=date.desc,start_time.desc&limit=50`);
+    document.getElementById('mylist').innerHTML=renderBookings(bookings);
+  }catch(e){}
 }
 
 function renderBookings(bookings){
@@ -1283,6 +1320,18 @@ function openModifyConfirm(){
 async function doModify(){
   if(!modifyingId||!selT) return;
   try{
+    // 🔴 防呆：改時間前重新查即時資料，確認新時段沒被占用
+    try{
+      const fresh=await sb(`/bookings?date=eq.${selD}&status=neq.cancelled&select=master_id,start_time`);
+      slotCache[selD]=fresh||[];
+    }catch(e){}
+    const rows=slotCache[selD]||[];
+    const mid=MASTERS[selM]?.id;
+    if(mid && rows.some(b=>b.master_id===mid&&b.start_time.slice(0,5)===selT)){
+      toast('該時段已被預約，請選擇其他時段','err');
+      return;
+    }
+
     const idToken = liff.getIDToken ? liff.getIDToken() : null;
     if(!idToken){toast('請重新登入 LINE 後再試','err');return;}
     const resp = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/customer-booking-modify',{
