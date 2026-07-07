@@ -1013,7 +1013,8 @@ async function doSubmit(){
     }
 
     const raw=phone?`${name}${phone}`:name;
-    const bookings=[];
+    const partySize = selM==='split' ? 2 : (selMode==='same' && selCount>1 ? selCount : 1);
+    const reservationType = selM==='split' ? 'split' : (selMode==='same' && selCount>1 ? 'same_master' : 'single');
     const baseBooking={
       master_id:masterId||MASTERS.zhiwei.id,
       raw_input:raw,customer_name:name,customer_phone:phone||null,
@@ -1022,24 +1023,31 @@ async function doSubmit(){
       guest_count:1,
       color_tag:isNewCustomer?'new_customer':'none',
       note:fullNote||null,
-      booking_source:'customer_app',status:'tentative'
+      booking_source:'customer_app',status:'tentative',
+      reservation_type:reservationType,
+      party_size:partySize
     };
-    bookings.push(baseBooking);
 
+    const extraBookings=[];
     // Split mode: add second booking for hongwen
     if(selM==='split'){
-      bookings.push({...baseBooking,master_id:MASTERS.hongwen.id,customer_name:name+'-同行',raw_input:raw});
+      extraBookings.push({...baseBooking,master_id:MASTERS.hongwen.id,customer_name:name+'-同行',raw_input:raw});
     }
     // Same master multi: add consecutive slots
     else if(selMode==='same' && selCount>1){
       for(let s=1;s<selCount;s++){
         const nextT=getNextTimeStr(selT,s);
-        if(nextT) bookings.push({...baseBooking,start_time:nextT+':00',customer_name:name+(selCount>2?`-同行${s}`:`-同行`),raw_input:raw});
+        if(nextT) extraBookings.push({...baseBooking,start_time:nextT+':00',customer_name:name+(selCount>2?`-同行${s}`:`-同行`),raw_input:raw});
       }
     }
 
-    for(const bk of bookings){
-      await sb('/bookings',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(bk)});
+    // Insert the first (anchor) booking, capturing its id
+    const firstResp = await sb('/bookings',{method:'POST',headers:{'Prefer':'return=representation'},body:JSON.stringify(baseBooking)});
+    const groupId = firstResp?.[0]?.id || null;
+
+    // Insert remaining bookings, linked to the anchor via booking_group_id
+    for(const bk of extraBookings){
+      await sb('/bookings',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify({...bk, booking_group_id: groupId})});
     }
 
     // Save phone binding + update customers
