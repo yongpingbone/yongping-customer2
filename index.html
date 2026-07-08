@@ -1538,7 +1538,14 @@ async function confirmBookingByCustomer(id){
       body:JSON.stringify({idToken, bookingId:id})
     });
     const result = await resp.json();
-    if(!result.success){toast(result.error||'確認失敗，請再試一次','err');loadMyBookings();return;}
+    if(!result.success){
+      if(String(result.error||'').includes('expired')){
+        toast('登入已過期，正在重新整理頁面…','err');
+        setTimeout(()=>location.reload(), 1500);
+        return;
+      }
+      toast(result.error||'確認失敗，請再試一次','err');loadMyBookings();return;
+    }
     toast('預約已確認！🎉','ok');
     loadMyBookings();
   }catch(e){
