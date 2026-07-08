@@ -1525,6 +1525,16 @@ function getConfirmParam(){
   return null;
 }
 
+// LINE 登入憑證過期時的統一處理：光是重新整理頁面沒有用，因為 LIFF 沒有登出過，
+// 瀏覽器裡還留著同一組（已經過期的）憑證，liff.init() 會直接沿用它，不會重新登入。
+// 一定要先登出、把舊憑證清掉，接下來 init() 才會判斷成「未登入」、觸發真正的
+// 重新登入拿新憑證，不是原地打轉。
+function handleExpiredLineToken(msg){
+  toast(msg||'登入已過期，正在重新整理...','err');
+  try{ if(liff && liff.logout) liff.logout(); }catch(e){}
+  setTimeout(()=>location.reload(), 1200);
+}
+
 // 客人二次確認：呼叫 Edge Function（驗 LINE idToken → 整組改 confirmed）
 async function confirmBookingByCustomer(id){
   if(!confirm('確認這個預約時間嗎？\n確認後即完成預約。'))return;
@@ -1539,8 +1549,7 @@ async function confirmBookingByCustomer(id){
     const result = await resp.json();
     if(!result.success){
       if(String(result.error||'').includes('expired')){
-        toast('登入已過期，請手動重新整理頁面後再按一次確認','err');
-        loadMyBookings();
+        handleExpiredLineToken('登入已過期，正在重新登入...');
         return;
       }
       toast(result.error||'確認失敗，請再試一次','err');loadMyBookings();return;
@@ -1567,7 +1576,7 @@ async function requestCancellation(bookingId, masterId, date, time){
     const result = await resp.json();
     if(!result.success){
       if(String(result.error||'').includes('expired')){
-        toast('登入已過期，請手動重新整理頁面後再試一次','err');
+        handleExpiredLineToken('登入已過期，正在重新登入...');
         return;
       }
       toast(result.error||'送出失敗，請再試一次','err');return;
@@ -1656,7 +1665,7 @@ async function doModify(){
     const result = await resp.json();
     if(!result.success){
       if(String(result.error||'').includes('expired')){
-        toast('登入已過期，請手動重新整理頁面後再試一次','err');
+        handleExpiredLineToken('登入已過期，正在重新登入...');
         return;
       }
       toast(result.error||'修改失敗，請重試','err');return;
