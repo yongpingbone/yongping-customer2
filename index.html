@@ -1577,7 +1577,13 @@ async function requestCancellation(bookingId, masterId, date, time){
       body:JSON.stringify({idToken, action:'cancel', bookingId, reason})
     });
     const result = await resp.json();
-    if(!result.success){toast(result.error||'送出失敗，請再試一次','err');return;}
+    if(!result.success){
+      if(String(result.error||'').includes('expired')){
+        toast('登入已過期，請手動重新整理頁面後再試一次','err');
+        return;
+      }
+      toast(result.error||'送出失敗，請再試一次','err');return;
+    }
     const msg=`❌ 客人申請取消預約\n日期：${date} ${time}\n${reason?`原因：${reason}\n`:''}\n請至師傅 app「📋 待確認 → 取消請求」處理`;
     await linePush(msg, masterId);
     toast('已送出取消申請','ok');
@@ -1653,7 +1659,13 @@ async function doModify(){
       body:JSON.stringify({idToken, action:'reschedule', bookingId:modifyingId, newDate:selD, newTime:selT+':00'})
     });
     const result = await resp.json();
-    if(!result.success){toast(result.error||'修改失敗，請重試','err');return;}
+    if(!result.success){
+      if(String(result.error||'').includes('expired')){
+        toast('登入已過期，請手動重新整理頁面後再試一次','err');
+        return;
+      }
+      toast(result.error||'修改失敗，請重試','err');return;
+    }
     toast('修改成功！','ok');
     modifyingId=null;
     document.getElementById('ctabtn').textContent='選好了，填資料 →';
