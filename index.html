@@ -1553,7 +1553,7 @@ async function requestCancellation(bookingId, masterId, date, time){
   try{
     const idToken = liff.getIDToken ? liff.getIDToken() : null;
     if(!idToken){toast('請重新登入 LINE 後再試','err');return;}
-    const resp = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/customer-booking-modify',{
+    const resp = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/hyper-api',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({idToken, action:'cancel', bookingId, reason})
@@ -1629,7 +1629,7 @@ async function doModify(){
 
     const idToken = liff.getIDToken ? liff.getIDToken() : null;
     if(!idToken){toast('請重新登入 LINE 後再試','err');return;}
-    const resp = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/customer-booking-modify',{
+    const resp = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/hyper-api',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({idToken, action:'reschedule', bookingId:modifyingId, newDate:selD, newTime:selT+':00'})
