@@ -1623,16 +1623,28 @@ async function doModify(){
   if(!modifyingId||!selT) return;
   try{
     // 🔴 防呆：改時間前重新查即時資料，確認新時段沒被占用
+    // 排除自己這筆（跟 hyper-api 後端的排除邏輯一致），不然客人選回原本的時段
+    // 會被誤判成「已被預約」——其實那就是他自己的預約。
+    // 注意：這裡刻意不寫回 slotCache（那是全站共用的同一份快取，如果把「排除自己」
+    // 後的結果覆蓋進去，之後其他地方讀到這個日期的快取，會漏看這個人自己的時段，
+    // 有造成誤判可預約、進而衝突的風險），改用一個獨立的本地變數，不影響共用快取。
+    let modifyCheckRows=[];
     try{
-      const fresh=await sb(`/bookings?date=eq.${selD}&status=neq.cancelled&select=master_id,start_time`);
-      slotCache[selD]=fresh||[];
+      modifyCheckRows=await sb(`/bookings?date=eq.${selD}&status=neq.cancelled&id=neq.${modifyingId}&select=master_id,start_time`)||[];
     }catch(e){}
-    const rows=slotCache[selD]||[];
+    const rows=modifyCheckRows;
     const mid=MASTERS[selM]?.id;
     if(mid && rows.some(b=>b.master_id===mid&&b.start_time.slice(0,5)===selT)){
       toast('該時段已被預約，請選擇其他時段','err');
       return;
     }
+
+    // 改期前先查一次目前實際的日期/時間+姓名，等一下要跟師傅講「從幾點改成幾點」
+    let origInfo=null;
+    try{
+      const rows2=await sb(`/bookings?id=eq.${modifyingId}&select=date,start_time,customer_name,master_id`);
+      origInfo=rows2 && rows2[0];
+    }catch(e){}
 
     const idToken = liff.getIDToken ? liff.getIDToken() : null;
     if(!idToken){toast('請重新登入 LINE 後再試','err');return;}
@@ -1648,6 +1660,13 @@ async function doModify(){
         return;
       }
       toast(result.error||'修改失敗，請重試','err');return;
+    }
+    // 通知師傅：客人自己改了時間（之前只有取消有通知，改期漏掉了）
+    if(origInfo){
+      const notifyMasterId = origInfo.master_id || mid;
+      const oldLabel = origInfo.date ? `${origInfo.date} ${(origInfo.start_time||'').slice(0,5)}` : '（原本申請中）';
+      const msg=`🔄 客人自己改期\n姓名：${origInfo.customer_name||''}\n原時間：${oldLabel}\n新時間：${selD} ${selT}`;
+      linePush(msg, notifyMasterId);
     }
     toast('修改成功！','ok');
     modifyingId=null;
