@@ -1463,7 +1463,6 @@ function renderBookings(bookings){
     let sc=b.status==='confirmed'?'st-ok':b.status==='cancelled'?'st-cancel':'st-pend';
     let st=b.status==='confirmed'?'✓ 已確認':b.status==='cancelled'?'✗ 已取消':'待確認';
     let actionBtns='';
-    let diff=Infinity;
     // ── 待客人二次確認：師傅已排定時段，客人需於 2 小時內確認 ──
     if(b.status==='awaiting_customer'){
       const dl=b.confirm_deadline?new Date(b.confirm_deadline):null;
@@ -1489,21 +1488,10 @@ function renderBookings(bookings){
         <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
       </div>`;
     } else if(hasSlot&&b.status==='confirmed'&&new Date(b.date+'T23:59:59')>new Date()){
-      const now=new Date();
-      const bkTime=new Date(b.date+'T'+b.start_time);
-      diff=(bkTime-now)/60000;
-      if(diff>1440){
-        actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
-          <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
-          <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
-        </div>`;
-      }
-    }
-    if(hasSlot&&diff<=1440&&b.status==='confirmed'){
-      actionBtns=`<div style="margin-top:6px">
-        <button onclick="contactMasterToCancel('${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">聯絡師傅</button>
-      </div>
-      <div style="font-size:10px;color:var(--t2);margin-top:4px">※ 24 小時內請直接聯絡師傅</div>`;
+      actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
+        <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
+        <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
+      </div>`;
     }
     return `<div class="bk" id="bk-${b.id}">
       <div class="bk-db">${d?`<div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div>`:'<div class="bk-dm">申請中</div>'}</div>
@@ -1592,11 +1580,6 @@ async function requestCancellation(bookingId, masterId, date, time){
     console.error(e);
     toast('送出失敗，請再試一次','err');
   }
-}
-
-async function contactMasterToCancel(masterId, date, time){
-  const lineUrl = 'https://line.me/R/oaMessage/@232hdfpl/?我想取消預約：' + encodeURIComponent(date + ' ' + time);
-  window.open(lineUrl, '_blank');
 }
 
 function modifyBooking(id, masterId, date){
