@@ -793,7 +793,18 @@ async function init(){
   loadMyBookings();
   // 深連結：從 LINE 確認訊息點進來 → 跳到我的預約並自動觸發確認
   const _cid=getConfirmParam();
-  if(_cid){ goPage('my'); setTimeout(()=>confirmBookingByCustomer(_cid),900); }
+  if(_cid){
+    goPage('my');
+    // 讀取後立刻把網址上的 confirm 參數清掉，避免之後任何原因造成的重新整理
+    // 又觸發一次自動確認（例如 token 過期時的處理），造成無窮迴圈
+    try{
+      const url=new URL(location.href);
+      url.searchParams.delete('confirm');
+      url.searchParams.delete('liff.state');
+      history.replaceState(null,'',url.toString());
+    }catch(e){}
+    setTimeout(()=>confirmBookingByCustomer(_cid),900);
+  }
 }
 
 // ── Page nav ─────────────────────────
@@ -1540,8 +1551,8 @@ async function confirmBookingByCustomer(id){
     const result = await resp.json();
     if(!result.success){
       if(String(result.error||'').includes('expired')){
-        toast('登入已過期，正在重新整理頁面…','err');
-        setTimeout(()=>location.reload(), 1500);
+        toast('登入已過期，請手動重新整理頁面後再按一次確認','err');
+        loadMyBookings();
         return;
       }
       toast(result.error||'確認失敗，請再試一次','err');loadMyBookings();return;
