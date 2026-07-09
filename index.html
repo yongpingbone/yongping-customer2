@@ -827,8 +827,8 @@ function pickCount(n){
   // Reset chips
   document.querySelectorAll('[id^="cnt-"]').forEach(el=>el.classList.remove('on','on-g'));
   document.getElementById('cnt-'+n).classList.add('on');
-  // Reset master chips
-  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
+  // Reset master chips（用 id 前綴精確選取，不要用 .mc，不然連上面剛設好的人數按鈕樣式也會被一起清掉）
+  document.querySelectorAll('[id^="mc-"]').forEach(el=>el.classList.remove('on','on-g'));
   // Hide all sections
   document.getElementById('sec-master-1').style.display='none';
   document.getElementById('sec-master-multi').style.display='none';
@@ -876,7 +876,7 @@ function pickMode(mode){
 
 function pickM(key){
   selM=key; selD=null; selT=null;
-  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
+  document.querySelectorAll('[id^="mc-"]').forEach(el=>el.classList.remove('on','on-g'));
   const chip=document.getElementById('mc-'+key);
   const isReq = MASTERS[key]?.type==='request';
   chip.classList.add(isReq?'on-g':'on');
@@ -1389,7 +1389,7 @@ function reset(){
 function goBack(to){
   if(to==='master'){
     selM=null;selD=null;selT=null;
-    document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
+    document.querySelectorAll('[id^="mc-"]').forEach(el=>el.classList.remove('on','on-g'));
     document.getElementById('sec-date').style.display='none';
     document.getElementById('sec-time').style.display='none';
     document.getElementById('ctawrap').style.display='none';
@@ -1601,7 +1601,7 @@ function modifyBooking(id, masterId, date){
   const mkey = Object.keys(MASTERS).find(k=>MASTERS[k].id===masterId)||'auto';
   const isReqMaster = MASTERS[mkey]?.type==='request';
   selM=mkey; selD=date; selT=null; modifyingId=id;
-  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
+  document.querySelectorAll('[id^="mc-"]').forEach(el=>el.classList.remove('on','on-g'));
   document.getElementById('mc-'+mkey)?.classList.add('on');
   goPage('book');
 
