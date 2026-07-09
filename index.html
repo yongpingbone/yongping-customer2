@@ -1336,18 +1336,9 @@ async function doSubmit(){
     // Save to localStorage
     saveCustomerData();
 
-    // Notify
-    const mname=m?.name||'不指定';
-    const msg=isReq
-      ? `📩 新預約申請\n師傅：${mname}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}\n${fullNote}\n\n請確認後通知客人`
-      : `📅 新預約通知\n師傅：${MNAME[masterId]||mname}\n日期：${selD} ${selT}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
-    const notifyIdToken = liff.getIDToken ? liff.getIDToken() : null;
-    await linePush(msg, masterId, notifyIdToken, groupId);
-    // 拆單（兩位師傅合診）：兩位都要各自收到通知，不能只通知主筆那位
-    if(selM==='split'){
-      const msg2=`📅 新預約通知（合診）\n師傅：${MNAME[MASTERS.hongwen.id]}\n日期：${selD} ${selT}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
-      await linePush(msg2, MASTERS.hongwen.id, notifyIdToken, groupId);
-    }
+    // 新預約通知改由資料庫觸發器(notify_master_on_new_booking)直接發送，
+    // 不再依賴這裡的 liff.getIDToken()（客人 LIFF session 開太久 token 會過期，
+    // 觸發器直接在資料庫端用內部密鑰呼叫，不受影響）。這裡不用再組訊息、不用再呼叫 linePush。
 
     closeForm();
     showSuccess(isReq);
