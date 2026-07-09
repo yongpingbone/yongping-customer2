@@ -298,6 +298,23 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
         <div class="tgrid" id="tgrid"></div>
       </div>
 
+      <!-- 改期用的希望時段（申請制師傅專用，沒有固定可約時段可選） -->
+      <div class="sec" id="sec-avail-modify" style="display:none">
+        <div class="arrow">↓</div>
+        <div class="lbl">希望改到的時段</div>
+        <div class="info-box" style="margin-bottom:10px">⚡ 這位師傅固定客多，需等待，送出後會有真人回覆確認新時間。</div>
+        <div style="background:var(--bg3);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+          <div>
+            <div style="font-size:12px;color:var(--t2);margin-bottom:5px;font-weight:700">📅 平日（週一～週五）</div>
+            <input class="fi" id="f-weekday-modify" placeholder="例：20:00 ~ 22:00" />
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--t2);margin-bottom:5px;font-weight:700">🗓️ 假日（週六）</div>
+            <input class="fi" id="f-weekend-modify" placeholder="例：14:00 ~ 18:00" />
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- 我的預約頁 -->
@@ -1594,10 +1611,27 @@ async function requestCancellation(bookingId, masterId, date, time){
 
 function modifyBooking(id, masterId, date){
   const mkey = Object.keys(MASTERS).find(k=>MASTERS[k].id===masterId)||'auto';
+  const isReqMaster = MASTERS[mkey]?.type==='request';
   selM=mkey; selD=date; selT=null; modifyingId=id;
   document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on','on-g'));
   document.getElementById('mc-'+mkey)?.classList.add('on');
   goPage('book');
+
+  if(isReqMaster){
+    // 申請制：沒有固定可約時段，不能走日期/時段選擇器，改收希望時段
+    document.getElementById('sec-date').style.display='none';
+    document.getElementById('sec-time').style.display='none';
+    document.getElementById('f-weekday-modify').value='';
+    document.getElementById('f-weekend-modify').value='';
+    document.getElementById('sec-avail-modify').style.display='block';
+    document.getElementById('ctawrap').style.display='block';
+    document.getElementById('ctabtn').textContent='送出改期申請 →';
+    document.getElementById('ctabtn').onclick=openModifyReqConfirm;
+    setTimeout(()=>document.getElementById('sec-avail-modify').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+    return;
+  }
+
+  document.getElementById('sec-avail-modify').style.display='none';
   document.getElementById('sec-date').style.display='block';
   const [dy,dm]=date.split('-').map(Number);
   calYear=dy; calMonth=dm-1;
@@ -1626,6 +1660,64 @@ function openModifyConfirm(){
   if(!selT){toast('請選擇新時段','err');return;}
   if(confirm(`確定修改為 ${selD} ${selT}？`)){
     doModify();
+  }
+}
+
+// 申請制師傅改期：沒有精確時段可選，收「希望時段」文字送出申請，
+// 師傅端會出現在「待確認 → 改期請求」，核准時才實際排入新時間
+function openModifyReqConfirm(){
+  const weekday=document.getElementById('f-weekday-modify')?.value.trim()||'';
+  const weekend=document.getElementById('f-weekend-modify')?.value.trim()||'';
+  if(!weekday && !weekend){toast('請填寫至少一個希望時段','err');return;}
+  if(confirm('確定送出改期申請？師傅確認新時間後會通知你。')){
+    doModifyReq();
+  }
+}
+
+async function doModifyReq(){
+  if(!modifyingId) return;
+  const weekday=document.getElementById('f-weekday-modify')?.value.trim()||'';
+  const weekend=document.getElementById('f-weekend-modify')?.value.trim()||'';
+  const avail=[weekday?`平日：${weekday}`:'', weekend?`假日：${weekend}`:''].filter(Boolean).join('　');
+  if(!avail) return;
+  try{
+    let origInfo=null;
+    try{
+      const rows2=await sb(`/bookings?id=eq.${modifyingId}&select=date,start_time,customer_name,master_id`);
+      origInfo=rows2 && rows2[0];
+    }catch(e){}
+
+    const idToken = liff.getIDToken ? liff.getIDToken() : null;
+    if(!idToken){toast('請重新登入 LINE 後再試','err');return;}
+    const resp = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/hyper-api',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({idToken, action:'reschedule', bookingId:modifyingId, newAvailNote:avail})
+    });
+    const result = await resp.json();
+    if(!result.success){
+      if(String(result.error||'').includes('expired')){
+        handleExpiredLineToken('登入已過期，正在重新登入...');
+        return;
+      }
+      toast(result.error||'送出失敗，請重試','err');return;
+    }
+    if(origInfo){
+      const oldLabel = origInfo.date ? `${origInfo.date} ${(origInfo.start_time||'').slice(0,5)}` : '（原本申請中）';
+      const notifyMasterId = origInfo.master_id || MASTERS[selM]?.id;
+      const msg=`🔄 客人申請改期\n姓名：${origInfo.customer_name||''}\n原時間：${oldLabel}\n希望時段：${avail}\n請至師傅 app「📋 待確認 → 改期請求」處理`;
+      linePush(msg, notifyMasterId, idToken, modifyingId);
+    }
+    toast('改期申請已送出，師傅確認後會通知你','ok');
+    modifyingId=null;
+    document.getElementById('sec-avail-modify').style.display='none';
+    document.getElementById('ctabtn').textContent='選好了，填資料 →';
+    document.getElementById('ctabtn').onclick=openForm;
+    reset();
+    goPage('my');
+  }catch(e){
+    console.error(e);
+    toast('送出失敗，請再試一次','err');
   }
 }
 
