@@ -699,13 +699,13 @@ async function linePushTo(userId, text){
   }
 }
 
-async function linePush(text, masterId, idToken, bookingId){
+async function linePush(text, masterId, idToken, bookingId, debugInfo){
   if(!masterId) return;
   try{
     const response = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/notify-master-line',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({masterId, messageText: text, idToken, bookingId})
+      body:JSON.stringify({masterId, messageText: text, idToken, bookingId, debugInfo})
     });
     const result = await response.json().catch(()=>({}));
     if(!result.success && !result.skipped) console.error('師傅通知推播失敗:', result.error);
@@ -1356,11 +1356,21 @@ async function doSubmit(){
       ? `📩 新預約申請\n師傅：${mname}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}\n${fullNote}\n\n請確認後通知客人`
       : `📅 新預約通知\n師傅：${MNAME[masterId]||mname}\n日期：${selD} ${selT}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
     const notifyIdToken = liff.getIDToken ? liff.getIDToken() : null;
-    await linePush(msg, masterId, notifyIdToken, groupId);
+    // 🔍 暫時診斷用：排查完可以整段拿掉
+    const _debugInfo = {
+      firstRespType: Array.isArray(firstResp) ? 'array' : typeof firstResp,
+      firstRespLen: Array.isArray(firstResp) ? firstResp.length : null,
+      firstRespRaw: JSON.stringify(firstResp).slice(0, 300),
+      groupIdValue: groupId,
+      liffGetIDTokenType: typeof (liff && liff.getIDToken),
+      notifyIdTokenType: typeof notifyIdToken,
+      notifyIdTokenLen: notifyIdToken ? String(notifyIdToken).length : 0
+    };
+    await linePush(msg, masterId, notifyIdToken, groupId, _debugInfo);
     // 拆單（兩位師傅合診）：兩位都要各自收到通知，不能只通知主筆那位
     if(selM==='split'){
       const msg2=`📅 新預約通知（合診）\n師傅：${MNAME[MASTERS.hongwen.id]}\n日期：${selD} ${selT}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
-      await linePush(msg2, MASTERS.hongwen.id, notifyIdToken, groupId);
+      await linePush(msg2, MASTERS.hongwen.id, notifyIdToken, groupId, _debugInfo);
     }
 
     closeForm();
