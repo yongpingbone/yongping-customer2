@@ -37,7 +37,6 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 
 .lbl{font-size:11px;font-weight:700;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
 .sec{margin-top:18px}.sec:first-child{margin-top:0}
-#sec-date{background:var(--bg3);border:1.5px solid var(--border);border-radius:14px;padding:14px 14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .arrow{text-align:center;color:var(--t2);font-size:16px;margin:4px 0;opacity:.4}
 
 /* Master */
@@ -61,21 +60,6 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 .d-mo{font-size:10px;color:var(--t2)}
 .d-num{font-size:19px;font-weight:900;line-height:1.1}
 .d-wk{font-size:10px;color:var(--t2)}
-
-/* Calendar */
-.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.cal-nav{background:none;border:1.5px solid var(--border);color:var(--text);border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer;font-family:inherit}
-.cal-nav:disabled{opacity:.3;cursor:default}
-.cal-title{font-size:15px;font-weight:900}
-.cal-wk-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
-.cal-wk-lbl{text-align:center;font-size:11px;color:var(--t2);padding:4px 0}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.cal-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:10px;background:var(--bg2);border:1.5px solid var(--border);cursor:pointer;user-select:none;font-size:14px;font-weight:700}
-.cal-cell.empty{background:none;border:none;cursor:default}
-.cal-cell.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan)}
-.cal-cell.disabled{opacity:.3;pointer-events:none}
-.cal-cell.closed{border-color:var(--red);color:var(--red);opacity:.6}
-.cal-tag{font-size:8px;margin-top:1px}
 
 /* Time */
 .tgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
@@ -281,13 +265,7 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
           <div class="lbl" style="margin-bottom:0">選擇日期</div>
           <button onclick="goBack('master')" style="background:none;border:1.5px solid var(--border);color:var(--t2);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit">← 重選師傅</button>
         </div>
-        <div class="cal-head">
-          <button class="cal-nav" id="calPrev" onclick="calNav(-1)">‹</button>
-          <div class="cal-title" id="calTitle"></div>
-          <button class="cal-nav" id="calNext" onclick="calNav(1)">›</button>
-        </div>
-        <div class="cal-wk-row" id="calWkRow"></div>
-        <div class="cal-grid" id="calGrid"></div>
+        <input type="date" id="custDateInput" onchange="onCustDateChange()" style="width:100%;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:var(--text);font-family:inherit;box-sizing:border-box">
       </div>
 
       <div class="sec" id="sec-time" style="display:none">
@@ -786,10 +764,8 @@ async function init(){
     profile={userId:'dev',displayName:'',pictureUrl:''};
     document.getElementById('uname').textContent='訪客';
   }
-  buildDates();
   await loadRestTimes();
   await loadStoreClosures();
-  buildDates(); // 店休資料到齊後重畫一次日期橫條，才會正確顯示「店休」
   document.getElementById('loader').style.display='none';
   const app=document.getElementById('app');
   app.style.display='flex';
@@ -864,8 +840,10 @@ function pickMode(mode){
   } else if(mode === 'split'){
     selM = 'split';
     document.getElementById('sec-date').style.display='block';
-    buildDates();
-    refreshDateAvailability('split');
+    const dInput=document.getElementById('custDateInput');
+    dInput.min=getTaipeiDateStr();
+    dInput.value='';
+    selD=null;
     const today=new Date();
     for(let i=0;i<7;i++){
       const d=new Date(today);d.setDate(d.getDate()+i);
@@ -889,8 +867,10 @@ function pickM(key){
     setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
   } else {
     document.getElementById('sec-date').style.display='block';
-    buildDates();
-    refreshDateAvailability(key);
+    const dInput=document.getElementById('custDateInput');
+    dInput.min=getTaipeiDateStr();
+    dInput.value='';
+    selD=null;
     const today=new Date();
     for(let i=0;i<7;i++){
       const d=new Date(today);d.setDate(d.getDate()+i);
@@ -900,94 +880,38 @@ function pickM(key){
   }
 }
 
-// ── Build dates ───────────────────────
-let calYear, calMonth; // 目前檢視的月曆年/月（calMonth 0-indexed）
-(function initCalState(){
-  const d=new Date();
-  calYear=d.getFullYear(); calMonth=d.getMonth();
-})();
-
-function fmtDateYMD(y,m,day){
-  return `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-}
-
-function buildDates(){
-  renderCalendar();
-}
-
-function renderCalendar(){
-  const title=document.getElementById('calTitle');
-  const wkRow=document.getElementById('calWkRow');
-  const grid=document.getElementById('calGrid');
-  if(!title||!grid) return;
-  title.textContent=`${calYear} 年 ${calMonth+1} 月`;
-
-  if(!wkRow.dataset.built){
-    wkRow.innerHTML=WK.map(w=>`<div class="cal-wk-lbl">週${w}</div>`).join('');
-    wkRow.dataset.built='1';
+async function onCustDateChange(){
+  const val=document.getElementById('custDateInput').value;
+  if(!val) return;
+  const todayStr=getTaipeiDateStr();
+  if(val<todayStr){
+    toast('不能選過去的日期','err');
+    document.getElementById('custDateInput').value='';
+    return;
   }
-
-  const today=new Date();
-  const todayStr=getTaipeiDateStr(today);
-  const isCurrentMonth = (calYear===today.getFullYear() && calMonth===today.getMonth());
-  document.getElementById('calPrev').disabled = isCurrentMonth;
-
-  const firstDay=new Date(calYear,calMonth,1).getDay();
-  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
-  const cells=[];
-  for(let i=0;i<firstDay;i++) cells.push(null);
-  for(let d=1;d<=daysInMonth;d++) cells.push(d);
-
-  grid.innerHTML='';
-  cells.forEach(day=>{
-    const cell=document.createElement('div');
-    if(day===null){
-      cell.className='cal-cell empty';
-      grid.appendChild(cell);
-      return;
-    }
-    const dateStr=fmtDateYMD(calYear,calMonth,day);
-    const dow=new Date(calYear,calMonth,day).getDay();
-    const isPast = dateStr < todayStr;
-    const closed = isDateClosed(dateStr);
-    const isSun = dow===0;
-    cell.className='cal-cell';
-    cell.dataset.date=dateStr;
-
-    if(isPast){
-      cell.classList.add('disabled');
-      cell.innerHTML=`${day}`;
-    } else if(closed){
-      cell.classList.add('closed');
-      cell.innerHTML=`${day}<div class="cal-tag">店休</div>`;
-      cell.title=closureReasonFor(dateStr)||'店休';
-    } else if(isSun){
-      cell.classList.add('disabled');
-      cell.innerHTML=`${day}<div class="cal-tag">電洽</div>`;
-      cell.title='週日僅接受電話或現場登記，不開放線上預約';
-    } else {
-      cell.innerHTML=`${day}`;
-      cell.onclick=()=>pickDate(dateStr);
-      if(selD===dateStr) cell.classList.add('on');
-    }
-    grid.appendChild(cell);
-  });
-}
-
-async function calNav(delta){
-  calMonth+=delta;
-  if(calMonth<0){ calMonth=11; calYear--; }
-  if(calMonth>11){ calMonth=0; calYear++; }
-  renderCalendar();
-  if(selM) await refreshDateAvailability(selM);
-}
-
-function pickDate(dateStr){
-  selD=dateStr; selT=null;
-  document.querySelectorAll('.cal-cell').forEach(el=>el.classList.remove('on'));
-  document.querySelector(`.cal-cell[data-date="${dateStr}"]`)?.classList.add('on');
-  document.getElementById('sec-time').style.display='block';
-  prefetch(dateStr);
+  if(isDateClosed(val)){
+    toast(`店休期間${closureReasonFor(val)?'（'+closureReasonFor(val)+'）':''}，請選別的日期`,'err');
+    document.getElementById('custDateInput').value='';
+    return;
+  }
+  if(new Date(val+'T00:00:00').getDay()===0){
+    toast('週日僅接受電話或現場登記，請直接聯絡師傅預約','err');
+    document.getElementById('custDateInput').value='';
+    return;
+  }
+  await prefetch(val); // 順便把這天的可約狀態、既有預約都查好（含 availCache）
+  if(!isDayOpenAtAll(val, selM)){
+    toast('這天這位師傅還沒開放線上預約，請選別的日期或改用電話/現場登記','err');
+    document.getElementById('custDateInput').value='';
+    return;
+  }
+  selD=val; selT=null;
+  if(modifyingId){
+    await buildTimeSlots_modify(val);
+  }else{
+    document.getElementById('sec-time').style.display='block';
+    renderSlots();
+  }
   setTimeout(()=>document.getElementById('sec-time').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
 }
 
@@ -1030,31 +954,6 @@ function isDayOpenAtAll(dateStr, masterKey){
 }
 
 // 選定師傅（或不指定/拆單）後，查目前月曆所在月份的開放設定，把沒開放的日子鎖住
-async function refreshDateAvailability(masterKey){
-  const grid=document.getElementById('calGrid');
-  if(!grid) return;
-  const minD=fmtDateYMD(calYear,calMonth,1);
-  const lastDay=new Date(calYear,calMonth+1,0).getDate();
-  const maxD=fmtDateYMD(calYear,calMonth,lastDay);
-  try{
-    const rows=await sb(`/master_day_availability?date=gte.${minD}&date=lte.${maxD}&select=master_id,date,is_open,open_slots`);
-    const byDate={};
-    (rows||[]).forEach(r=>{
-      byDate[r.date]=byDate[r.date]||{};
-      byDate[r.date][r.master_id]={isOpen:!!r.is_open, openSlots:(Array.isArray(r.open_slots)&&r.open_slots.length)?new Set(r.open_slots):null};
-    });
-    const dates=[...grid.querySelectorAll('.cal-cell[data-date]')].map(el=>el.dataset.date);
-    dates.forEach(d=>{ availCache[d]={...(availCache[d]||{}), ...(byDate[d]||{})}; });
-  }catch(e){ return; } // 查詢失敗就不動畫面，避免整個約不到（保守起見不因網路錯誤鎖死）
-  grid.querySelectorAll('.cal-cell[data-date]').forEach(el=>{
-    const d=el.dataset.date;
-    if(el.classList.contains('closed')||el.classList.contains('disabled')) return; // 店休/週日/過去，維持原樣不覆蓋
-    const ok = isDayOpenAtAll(d, masterKey);
-    el.classList.toggle('disabled', !ok);
-    el.onclick = ok ? ()=>pickDate(d) : null;
-  });
-}
-
 function renderSlots(){
   const tgrid=document.getElementById('tgrid');
   tgrid.innerHTML='';
@@ -1388,7 +1287,8 @@ function goBack(to){
     document.getElementById('pg-book').scrollIntoView({behavior:'smooth',block:'start'});
   } else if(to==='date'){
     selD=null;selT=null;
-    document.querySelectorAll('.cal-cell').forEach(el=>el.classList.remove('on'));
+    const dInput=document.getElementById('custDateInput');
+    if(dInput) dInput.value='';
     document.getElementById('sec-time').style.display='none';
     document.getElementById('ctawrap').style.display='none';
     document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -1589,7 +1489,7 @@ async function requestCancellation(bookingId, masterId, date, time){
   }
 }
 
-function modifyBooking(id, masterId, date){
+async function modifyBooking(id, masterId, date){
   const mkey = Object.keys(MASTERS).find(k=>MASTERS[k].id===masterId)||'auto';
   const isReqMaster = MASTERS[mkey]?.type==='request';
   selM=mkey; selD=date; selT=null; modifyingId=id;
@@ -1613,16 +1513,11 @@ function modifyBooking(id, masterId, date){
 
   document.getElementById('sec-avail-modify').style.display='none';
   document.getElementById('sec-date').style.display='block';
-  const [dy,dm]=date.split('-').map(Number);
-  calYear=dy; calMonth=dm-1;
-  setTimeout(async ()=>{
-    renderCalendar();
-    await refreshDateAvailability(mkey);
-    document.querySelectorAll('.cal-cell').forEach(el=>{
-      if(el.dataset.date===date) el.classList.add('on');
-    });
-    buildTimeSlots_modify(date);
-  },200);
+  const dInput=document.getElementById('custDateInput');
+  dInput.min=getTaipeiDateStr();
+  dInput.value=date;
+  await buildTimeSlots_modify(date);
+  setTimeout(()=>document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
 }
 
 let modifyingId = null;
