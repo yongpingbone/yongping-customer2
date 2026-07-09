@@ -682,13 +682,13 @@ async function linePushTo(userId, text){
   }
 }
 
-async function linePush(text, masterId){
+async function linePush(text, masterId, idToken, bookingId){
   if(!masterId) return;
   try{
     const response = await fetch('https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/notify-master-line',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({masterId, messageText: text})
+      body:JSON.stringify({masterId, messageText: text, idToken, bookingId})
     });
     const result = await response.json().catch(()=>({}));
     if(!result.success && !result.skipped) console.error('師傅通知推播失敗:', result.error);
@@ -1335,11 +1335,12 @@ async function doSubmit(){
     const msg=isReq
       ? `📩 新預約申請\n師傅：${mname}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}\n${fullNote}\n\n請確認後通知客人`
       : `📅 新預約通知\n師傅：${MNAME[masterId]||mname}\n日期：${selD} ${selT}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
-    await linePush(msg, masterId);
+    const notifyIdToken = liff.getIDToken ? liff.getIDToken() : null;
+    await linePush(msg, masterId, notifyIdToken, groupId);
     // 拆單（兩位師傅合診）：兩位都要各自收到通知，不能只通知主筆那位
     if(selM==='split'){
       const msg2=`📅 新預約通知（合診）\n師傅：${MNAME[MASTERS.hongwen.id]}\n日期：${selD} ${selT}\n姓名：${name}\n年齡：${age}歲\n電話：${phone}${fullNote?'\n'+fullNote:''}`;
-      await linePush(msg2, MASTERS.hongwen.id);
+      await linePush(msg2, MASTERS.hongwen.id, notifyIdToken, groupId);
     }
 
     closeForm();
@@ -1582,7 +1583,7 @@ async function requestCancellation(bookingId, masterId, date, time){
       toast(result.error||'送出失敗，請再試一次','err');return;
     }
     const msg=`❌ 客人申請取消預約\n日期：${date} ${time}\n${reason?`原因：${reason}\n`:''}\n請至師傅 app「📋 待確認 → 取消請求」處理`;
-    await linePush(msg, masterId);
+    await linePush(msg, masterId, idToken, bookingId);
     toast('已送出取消申請','ok');
     loadMyBookings();
   }catch(e){
@@ -1675,7 +1676,7 @@ async function doModify(){
       const notifyMasterId = origInfo.master_id || mid;
       const oldLabel = origInfo.date ? `${origInfo.date} ${(origInfo.start_time||'').slice(0,5)}` : '（原本申請中）';
       const msg=`🔄 客人自己改期\n姓名：${origInfo.customer_name||''}\n原時間：${oldLabel}\n新時間：${selD} ${selT}`;
-      linePush(msg, notifyMasterId);
+      linePush(msg, notifyMasterId, idToken, modifyingId);
     }
     toast('修改成功！','ok');
     modifyingId=null;
