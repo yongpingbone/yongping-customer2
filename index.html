@@ -860,24 +860,19 @@ function pickM(key){
   const isReq = MASTERS[key]?.type==='request';
   chip.classList.add(isReq?'on-g':'on');
 
-  if(isReq){
-    document.getElementById('sec-date').style.display='none';
-    document.getElementById('sec-time').style.display='none';
-    document.getElementById('ctawrap').style.display='block';
-    setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
-  } else {
-    document.getElementById('sec-date').style.display='block';
-    const dInput=document.getElementById('custDateInput');
-    dInput.min=getTaipeiDateStr();
-    dInput.value='';
-    selD=null;
-    const today=new Date();
-    for(let i=0;i<7;i++){
-      const d=new Date(today);d.setDate(d.getDate()+i);
-      prefetch(getTaipeiDateStr(d));
-    }
-    setTimeout(()=>document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+  // 申請制師傅也先給日期選擇——如果那天師傅自己開放了，一樣能直接選時段；
+  // 沒開放才會在 onCustDateChange 裡落回「希望時段」申請表單
+  document.getElementById('sec-date').style.display='block';
+  document.getElementById('ctawrap').style.display='none';
+  const dInput=document.getElementById('custDateInput');
+  dInput.min=getTaipeiDateStr();
+  dInput.value='';
+  const today=new Date();
+  for(let i=0;i<7;i++){
+    const d=new Date(today);d.setDate(d.getDate()+i);
+    prefetch(getTaipeiDateStr(d));
   }
+  setTimeout(()=>document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
 }
 
 async function onCustDateChange(){
@@ -901,6 +896,17 @@ async function onCustDateChange(){
   }
   await prefetch(val); // 順便把這天的可約狀態、既有預約都查好（含 availCache）
   if(!isDayOpenAtAll(val, selM)){
+    const isReqMaster = MASTERS[selM]?.type==='request';
+    if(isReqMaster && !modifyingId){
+      // 這天沒開放，但這位是申請制師傅——落回「希望時段」申請表單，不是直接擋住
+      toast(`${MASTERS[selM].name}這天還沒開放線上直約，改用「希望時段」方式提出申請`,'err');
+      selD=null; selT=null;
+      document.getElementById('custDateInput').value='';
+      document.getElementById('sec-time').style.display='none';
+      document.getElementById('ctawrap').style.display='block';
+      setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+      return;
+    }
     toast('這天這位師傅還沒開放線上預約，請選別的日期或改用電話/現場登記','err');
     document.getElementById('custDateInput').value='';
     return;
@@ -1031,11 +1037,11 @@ function checkAgeWarning(){
 
 // ── Open form ─────────────────────────
 function openForm(){
-  const isReqCheck=MASTERS[selM]?.type==='request';
+  const isReqCheck=MASTERS[selM]?.type==='request' && !(selD&&selT);
   if(!selM&&selMode!=='split'){toast('請選擇師傅','err');return;}
   if(!isReqCheck&&(!selD||!selT)){toast('請選擇日期和時段','err');return;}
   const m=MASTERS[selM]||{};
-  const isReq=m?.type==='request';
+  const isReq=m?.type==='request' && !(selD&&selT);
   const mname=selM==='split'?'哲瑋老師 + 泓文老師':(isReq?m.name:(selM==='auto'?'不指定':m.name));
 
   // Load stored data into form
@@ -1113,7 +1119,7 @@ async function doSubmit(){
   const avail=[weekday?`平日：${weekday}`:'', weekend?`假日：${weekend}`:''].filter(Boolean).join('　');
   const note=document.getElementById('f-note').value.trim();
   const m=MASTERS[selM];
-  const isReq=m?.type==='request';
+  const isReq=m?.type==='request' && !(selD&&selT);
 
   if(!name){toast('請輸入姓名','err');return;}
   if(!phone||!/^09\d{8}$/.test(phone)){toast('請輸入正確手機號碼','err');return;}
