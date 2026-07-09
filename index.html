@@ -1327,8 +1327,11 @@ async function doSubmit(){
     }
 
     // Save phone binding + update customers
+    // （line_bindings 這筆一定要 await：notify-master-line 的 idToken 驗證
+    // 要即時查這張表找電話，如果沒等寫入完成就送推播，新客人第一次預約
+    // 會查到 0 筆綁定，被判定無權、推播被自己擋掉）
     if(profile?.userId){
-      sb('/line_bindings?on_conflict=line_user_id',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
+      await sb('/line_bindings?on_conflict=line_user_id',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
         body:JSON.stringify({line_user_id:profile.userId,phone,display_name:profile.displayName||name})}).catch(()=>{});
       sb('/customers?phone=eq.'+encodeURIComponent(phone),{
         method:'PATCH',
