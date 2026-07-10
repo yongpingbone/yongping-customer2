@@ -894,11 +894,11 @@ async function pickM(key){
   document.getElementById('ctawrap').style.display='none';
 
   if(isReq){
-    // 申請制師傅：查近期(60天內)實際「日期+時間」都還能約的組合——
+    // 申請制師傅：查近期(20天內)實際「日期+時間」都還能約的組合——
     // 不能只看這天有沒有標記開放，要扣掉已經被約走的時段、休息時段、店休日，
     // 不然會出現「顯示這天開放，點進去卻整排已滿」的誤導情況。
     const todayStr = getTaipeiDateStr();
-    const future = new Date(); future.setDate(future.getDate()+60);
+    const future = new Date(); future.setDate(future.getDate()+20);
     const futureStr = getTaipeiDateStr(future);
     const masterId = MASTERS[key].id;
     const [availRows, bookingRows] = await Promise.all([
@@ -1530,15 +1530,26 @@ function renderBookingCard(b){
       <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
     </div>`;
   }
+  const custName=(b.customer_name||'').trim();
   return `<div class="bk" id="bk-${b.id}">
     <div class="bk-db">${d?`<div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div>`:'<div class="bk-dm">申請中</div>'}</div>
     <div class="bk-info">
       ${hasSlot?`<div class="bk-time">${timeLabel}</div>`:'<div style="font-size:13px;color:var(--t2);font-weight:700">申請制・等待師傅安排</div>'}
-      <div class="bk-mst">${MNAME[b.master_id]||''} 老師</div>
+      <div class="bk-mst">${MNAME[b.master_id]||''} 老師${custName?`　<span style="color:var(--t2)">${custName}</span>`:''}</div>
       ${actionBtns}
     </div>
     <span class="bk-st ${sc}">${st}</span>
   </div>`;
+}
+// 收合狀態記錄在記憶體(不用persist，重新整理後回到預設值即可)：
+// 待確認/已確認預設展開(最需要客人注意的)，已取消預設收合(歷史紀錄，不用一開始就佔畫面)
+const bkSectionOpen={pending:true,success:true,cancelled:false};
+function toggleBkSection(key){
+  bkSectionOpen[key]=!bkSectionOpen[key];
+  const body=document.getElementById('bk-sec-body-'+key);
+  const arrow=document.getElementById('bk-sec-arrow-'+key);
+  if(body) body.style.display=bkSectionOpen[key]?'block':'none';
+  if(arrow) arrow.textContent=bkSectionOpen[key]?'▾':'▸';
 }
 function renderBookings(bookings){
   if(!bookings?.length) return '<div class="empty">目前沒有預約</div>';
@@ -1561,10 +1572,13 @@ function renderBookings(bookings){
     ['success','已確認'],
     ['cancelled','已取消']
   ];
-  return sections.filter(([key])=>groups[key].length>0).map(([key,label])=>
-    `<div style="font-size:12px;font-weight:700;color:var(--t2);margin:14px 0 8px;letter-spacing:1px">${label}</div>`
-    + groups[key].map(renderBookingCard).join('')
-  ).join('');
+  return sections.filter(([key])=>groups[key].length>0).map(([key,label])=>{
+    const isOpen=bkSectionOpen[key];
+    return `<div onclick="toggleBkSection('${key}')" style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--t2);margin:14px 0 8px;letter-spacing:1px;cursor:pointer;user-select:none">
+      <span id="bk-sec-arrow-${key}">${isOpen?'▾':'▸'}</span>${label}（${groups[key].length}）
+    </div>
+    <div id="bk-sec-body-${key}" style="display:${isOpen?'block':'none'}">${groups[key].map(renderBookingCard).join('')}</div>`;
+  }).join('');
 }
 
 function toast(msg,type){
