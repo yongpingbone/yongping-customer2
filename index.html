@@ -1224,6 +1224,8 @@ async function doSubmit(){
     if(profile?.userId){
       await sb('/line_bindings?on_conflict=line_user_id',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},
         body:JSON.stringify({line_user_id:profile.userId,phone,display_name:profile.displayName||name})}).catch(()=>{});
+      sb('/customer_known_phones?on_conflict=line_user_id,phone',{method:'POST',headers:{'Prefer':'resolution=ignore-duplicates'},
+        body:JSON.stringify({line_user_id:profile.userId,phone})}).catch(()=>{});
       sb('/customers?phone=eq.'+encodeURIComponent(phone),{
         method:'PATCH',
         headers:{'Prefer':'return=minimal'},
@@ -1310,19 +1312,28 @@ async function loadMyBookings(){
       document.getElementById('mylist').innerHTML='<div class="empty">請先登入 LINE</div>';
       return;
     }
-    const bindings=await sb(`/line_bindings?line_user_id=eq.${profile.userId}&select=phone&limit=1`).catch(()=>[]);
-    const phone=bindings?.[0]?.phone;
-    if(!phone){
+    const known=await sb(`/customer_known_phones?line_user_id=eq.${profile.userId}&select=phone`).catch(()=>[]);
+    let phones=[...new Set((known||[]).map(r=>r.phone).filter(Boolean))];
+    if(phones.length===0){
+      // 還沒有 customer_known_phones 紀錄（例如帳號是在這個功能上線前就綁定的舊資料），
+      // 退回原本的 line_bindings 單一電話查法，不要因為新表還沒補齊資料就完全查不到
+      const bindings=await sb(`/line_bindings?line_user_id=eq.${profile.userId}&select=phone&limit=1`).catch(()=>[]);
+      const legacyPhone=bindings?.[0]?.phone;
+      if(legacyPhone) phones=[legacyPhone];
+    }
+    if(phones.length===0){
       document.getElementById('mylist').innerHTML='<div class="empty" style="font-size:13px">完成第一次預約後<br>預約紀錄會顯示在這裡</div>';
       return;
     }
-    const bookings=await sb(`/bookings?customer_phone=eq.${encodeURIComponent(phone)}&order=date.desc,start_time.desc&limit=50`);
+    const phoneFilter=phones.map(p=>encodeURIComponent(p)).join(',');
+    const bookings=await sb(`/bookings?customer_phone=in.(${phoneFilter})&order=date.desc,start_time.desc&limit=50`);
     document.getElementById('mylist').innerHTML=renderBookings(bookings);
 
-    // 設定 Realtime 訂閱（只在電話號碼首次確定時建立一次）
-    if(currentPhone !== phone){
-      currentPhone = phone;
-      setupRealtimeSubscription(phone);
+    // 設定 Realtime 訂閱（只在電話號碼首次確定時建立一次，多支電話取第一支代表訂閱即可）
+    const primaryPhone=phones[0];
+    if(currentPhone !== primaryPhone){
+      currentPhone = primaryPhone;
+      setupRealtimeSubscription(primaryPhone);
     }
   }catch(e){
     document.getElementById('mylist').innerHTML='<div class="empty">載入失敗</div>';
