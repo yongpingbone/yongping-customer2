@@ -42,7 +42,8 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 /* Master */
 .mrow{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
 .mrow::-webkit-scrollbar{display:none}
-.mc{display:flex;flex-direction:column;align-items:center;min-width:70px;padding:12px 8px 10px;background:var(--bg2);border:1.5px solid var(--border);border-radius:14px;cursor:pointer;transition:.15s;flex-shrink:0;user-select:none}
+.mc{display:flex;flex-direction:column;align-items:center;min-width:70px;padding:12px 8px 10px;background:var(--bg2);border:1.5px solid var(--border);border-radius:14px;cursor:pointer;transition:.15s;flex-shrink:0;user-select:none;position:relative}
+.mc-last{position:absolute;top:-8px;right:-6px;background:var(--cyan);color:#00171f;font-size:9px;font-weight:900;padding:2px 6px;border-radius:8px;white-space:nowrap;pointer-events:none}
 .mc.on{border-color:var(--cyan);background:var(--cdim)}
 .mc.on-g{border-color:var(--gold);background:var(--gdim)}
 .mc-nm{font-size:16px;font-weight:900;margin-bottom:4px}
@@ -266,6 +267,7 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
           <button onclick="goBack('master')" style="background:none;border:1.5px solid var(--border);color:var(--t2);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit">← 重選師傅</button>
         </div>
         <input type="date" id="custDateInput" onchange="onCustDateChange()" style="width:100%;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:var(--text);font-family:inherit;box-sizing:border-box">
+        <div id="openDatesHint" style="display:none;margin-top:8px;font-size:12px;color:var(--cyan);background:var(--cdim);border-radius:8px;padding:8px 10px;line-height:1.5"></div>
       </div>
 
       <div class="sec" id="sec-time" style="display:none">
@@ -594,6 +596,15 @@ let selectedDays = new Set();
 // ────────────────────────────────────────
 const STORAGE_KEY = 'yongping_customer_data';
 
+function markLastMaster(key){
+  const card = document.getElementById('mc-'+key);
+  if(!card || card.querySelector('.mc-last')) return;
+  const badge = document.createElement('div');
+  badge.className = 'mc-last';
+  badge.textContent = '上次';
+  card.appendChild(badge);
+}
+
 function saveCustomerData(){
   const data = {
     name: document.getElementById('f-name').value.trim(),
@@ -602,6 +613,7 @@ function saveCustomerData(){
     fracture: chipVals['fracture'] || '',
     spine: chipVals['spine'] || '',
     note: document.getElementById('f-note').value.trim(),
+    lastMaster: selM || '',
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
@@ -761,6 +773,7 @@ async function init(){
       setTimeout(()=>document.getElementById('setup-name').focus(),300);
       return;
     }
+    if(stored.lastMaster) markLastMaster(stored.lastMaster);
   }catch(e){
     profile={userId:'dev',displayName:'',pictureUrl:''};
     document.getElementById('uname').textContent='訪客';
@@ -855,17 +868,47 @@ function pickMode(mode){
   }
 }
 
-function pickM(key){
+async function pickM(key){
   selM=key; selD=null; selT=null;
   document.querySelectorAll('[id^="mc-"]').forEach(el=>el.classList.remove('on','on-g'));
   const chip=document.getElementById('mc-'+key);
   const isReq = MASTERS[key]?.type==='request';
   chip.classList.add(isReq?'on-g':'on');
+  document.getElementById('sec-date').style.display='none';
+  document.getElementById('sec-time').style.display='none';
+  document.getElementById('ctawrap').style.display='none';
+
+  if(isReq){
+    // 申請制師傅：先快速查一下近期(60天內)有沒有「任何」開放日。
+    // 完全沒有的話，不用讓客人多選一次日期只為了被告知「這天不能約」，
+    // 直接跳過日期選擇，進希望時段申請表單。
+    const todayStr = getTaipeiDateStr();
+    const future = new Date(); future.setDate(future.getDate()+60);
+    const futureStr = getTaipeiDateStr(future);
+    const rows = await sb(`/master_day_availability?master_id=eq.${MASTERS[key].id}&date=gte.${todayStr}&date=lte.${futureStr}&is_open=eq.true&select=date&order=date.asc`).catch(()=>[]);
+    if(!rows || rows.length===0){
+      document.getElementById('ctawrap').style.display='block';
+      setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+      return;
+    }
+    // 直接列出實際有開放的日期，客人不用一天一天亂試
+    const hint = document.getElementById('openDatesHint');
+    if(hint){
+      const dates = rows.map(r=>{
+        const [,m,d] = r.date.split('-');
+        return `${parseInt(m)}/${parseInt(d)}`;
+      });
+      hint.textContent = `${MASTERS[key].name}近期開放：${dates.join('、')}`;
+      hint.style.display = 'block';
+    }
+  } else {
+    const hint = document.getElementById('openDatesHint');
+    if(hint) hint.style.display = 'none';
+  }
 
   // 申請制師傅也先給日期選擇——如果那天師傅自己開放了，一樣能直接選時段；
   // 沒開放才會在 onCustDateChange 裡落回「希望時段」申請表單
   document.getElementById('sec-date').style.display='block';
-  document.getElementById('ctawrap').style.display='none';
   const dInput=document.getElementById('custDateInput');
   dInput.min=getTaipeiDateStr();
   dInput.value='';
