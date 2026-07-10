@@ -492,7 +492,7 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 <div class="sheet" style="text-align:center">
   <div style="font-size:40px;margin-bottom:12px">✅</div>
   <div style="font-size:17px;font-weight:900;margin-bottom:16px">送出成功！</div>
-  <div id="success-msg" style="font-size:14px;color:var(--t2);line-height:1.8;white-space:pre-line;text-align:left;background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:20px"></div>
+  <div id="success-msg" style="font-size:14px;color:var(--t2);line-height:1.7;text-align:left;margin-bottom:20px"></div>
   <button onclick="document.getElementById('sh-success').classList.remove('show');goPage('my')"
     style="width:100%;padding:14px;border-radius:12px;background:var(--cyan);border:none;color:#000;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit">
     查看我的預約
@@ -1725,40 +1725,32 @@ async function doModify(){
 }
 
 function showSuccess(isReq){
-  const msg = isReq
-    ? `感謝申請！🙏
-老師和小編會盡快確認
-預約確認後再麻煩幫我準時抵達🙏
-
-⚡遲到10分鐘內：
-無法做滿30分鐘！
-
-⚡遲到超過15分鐘：
-請【主動告知】並協助改期！
-
-⚡放鳥2次 黑名單
-時間到沒出現沒告知，就是放鳥！
-
-我們都可以配合取消、改時間
-只要提前和我們說🙏🙏`
-    : `感謝預約！🙏
-老師和小編會盡快確認
-預約確認後再麻煩幫我準時抵達🙏
-
-⚡遲到10分鐘內：
-無法做滿30分鐘！
-
-⚡遲到超過15分鐘：
-請【主動告知】並協助改期！
-
-⚡放鳥2次 黑名單
-時間到沒出現沒告知，就是放鳥！
-
-我們都可以配合取消、改時間
-只要提前和我們說🙏🙏`;
+  const greeting = isReq ? '感謝申請！' : '感謝預約！';
+  const html = `
+    <div style="background:var(--cdim);border:1px solid var(--cyan);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+      <div style="font-size:16px;font-weight:900;color:var(--cyan);margin-bottom:6px">🙏 ${greeting}</div>
+      <div style="color:var(--text)">老師和小編會盡快確認，預約確認後再麻煩幫我準時抵達🙏</div>
+    </div>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px 16px">
+      <div style="font-size:12px;color:var(--t2);font-weight:700;margin-bottom:10px">⚡ 提醒您</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="font-weight:900;white-space:nowrap;color:var(--text)">遲到10分鐘內：</div>
+        <div>無法做滿30分鐘！</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="font-weight:900;white-space:nowrap;color:var(--text)">遲到超過15分鐘：</div>
+        <div>請【主動告知】並協助改期！</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="font-weight:900;white-space:nowrap;color:var(--text)">放鳥2次：</div>
+        <div>黑名單。時間到沒出現沒告知，就是放鳥！</div>
+      </div>
+      <div style="margin-top:4px;padding-top:10px;border-top:1px solid var(--border)">我們都可以配合取消、改時間，只要提前和我們說🙏🙏</div>
+    </div>
+  `;
 
   const ov = document.getElementById('sh-success');
-  document.getElementById('success-msg').innerText = msg;
+  document.getElementById('success-msg').innerHTML = html;
   ov.classList.add('show');
 }
 
