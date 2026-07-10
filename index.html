@@ -302,6 +302,7 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 
     <!-- 我的預約頁 -->
     <div id="pg-my" class="mwrap" style="display:none">
+      <div id="customer-card"></div>
       <div id="mylist"><div class="empty"><div class="spin" style="margin:0 auto"></div></div></div>
     </div>
 
@@ -339,6 +340,15 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
     <div class="chips" id="setup-chips-visited">
       <button class="chip" onclick="setupPickChip('visited','來過')">來過</button>
       <button class="chip" onclick="setupPickChip('visited','第一次來')">第一次來</button>
+    </div>
+  </div>
+
+  <!-- 性別（選填） -->
+  <div class="fg">
+    <label class="fl">性別</label>
+    <div class="chips" id="setup-chips-gender">
+      <button class="chip" onclick="setupPickChip('gender','男')">男</button>
+      <button class="chip" onclick="setupPickChip('gender','女')">女</button>
     </div>
   </div>
 
@@ -740,6 +750,7 @@ async function completeFirstSetup(){
     fracture: setupChipVals['fracture'] || '',
     spine: setupChipVals['spine'] || '',
     hasVisitedBefore: setupChipVals['visited']==='來過',
+    gender: setupChipVals['gender'] || '',
     note: '',
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -1420,6 +1431,41 @@ function goBack(to){
 let currentPhone = null;
 let bookingsChannel = null;
 
+// 客人名片卡：姓名/性別/電話 + 總次數(只算成功完成的confirmed，不含已取消/no_show) + 最常約的師傅(自動統計)
+async function loadCustomerCard(phones){
+  try{
+    const phoneFilter=phones.map(p=>encodeURIComponent(p)).join(',');
+    const rows=await sb(`/bookings?customer_phone=in.(${phoneFilter})&status=eq.confirmed&select=master_id`);
+    const total=rows?.length||0;
+    const counts={};
+    (rows||[]).forEach(r=>{ if(r.master_id) counts[r.master_id]=(counts[r.master_id]||0)+1; });
+    let topMasterId=null, topCount=0;
+    for(const [mid,c] of Object.entries(counts)){
+      if(c>topCount){ topCount=c; topMasterId=mid; }
+    }
+    const topMasterName=topMasterId?(MNAME[topMasterId]||''):'';
+    const stored=getStoredCustomerData()||{};
+    const genderLabel=stored.gender?`・${stored.gender}`:'';
+    document.getElementById('customer-card').innerHTML=`
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px">
+        <div style="font-size:16px;font-weight:900;margin-bottom:2px">${stored.name||''}${genderLabel}</div>
+        <div style="font-size:13px;color:var(--t2);margin-bottom:10px">${stored.phone||''}</div>
+        <div style="display:flex;gap:24px">
+          <div>
+            <div style="font-size:20px;font-weight:900;color:var(--cyan)">${total}</div>
+            <div style="font-size:11px;color:var(--t2)">總次數</div>
+          </div>
+          ${topMasterName?`<div>
+            <div style="font-size:16px;font-weight:900;padding-top:3px">${topMasterName}</div>
+            <div style="font-size:11px;color:var(--t2)">最常約</div>
+          </div>`:''}
+        </div>
+      </div>
+    `;
+  }catch(e){
+    document.getElementById('customer-card').innerHTML='';
+  }
+}
 async function loadMyBookings(){
   try{
     if(!profile?.userId){
@@ -1436,9 +1482,11 @@ async function loadMyBookings(){
       if(legacyPhone) phones=[legacyPhone];
     }
     if(phones.length===0){
+      document.getElementById('customer-card').innerHTML='';
       document.getElementById('mylist').innerHTML='<div class="empty" style="font-size:13px">完成第一次預約後<br>預約紀錄會顯示在這裡</div>';
       return;
     }
+    loadCustomerCard(phones);
     const phoneFilter=phones.map(p=>encodeURIComponent(p)).join(',');
     const bookings=await sb(`/bookings?customer_phone=in.(${phoneFilter})&order=created_at.desc&limit=10`);
     document.getElementById('mylist').innerHTML=renderBookings(bookings);
