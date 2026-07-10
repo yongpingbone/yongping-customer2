@@ -881,26 +881,58 @@ async function pickM(key){
   document.getElementById('ctawrap').style.display='none';
 
   if(isReq){
-    // 申請制師傅：先快速查一下近期(60天內)有沒有「任何」開放日。
-    // 完全沒有的話，不用讓客人多選一次日期只為了被告知「這天不能約」，
-    // 直接跳過日期選擇，進希望時段申請表單。
+    // 申請制師傅：查近期(60天內)實際「日期+時間」都還能約的組合——
+    // 不能只看這天有沒有標記開放，要扣掉已經被約走的時段、休息時段、店休日，
+    // 不然會出現「顯示這天開放，點進去卻整排已滿」的誤導情況。
     const todayStr = getTaipeiDateStr();
     const future = new Date(); future.setDate(future.getDate()+60);
     const futureStr = getTaipeiDateStr(future);
-    const rows = await sb(`/master_day_availability?master_id=eq.${MASTERS[key].id}&date=gte.${todayStr}&date=lte.${futureStr}&is_open=eq.true&select=date&order=date.asc`).catch(()=>[]);
-    if(!rows || rows.length===0){
+    const masterId = MASTERS[key].id;
+    const [availRows, bookingRows] = await Promise.all([
+      sb(`/master_day_availability?master_id=eq.${masterId}&date=gte.${todayStr}&date=lte.${futureStr}&is_open=eq.true&select=date,open_slots&order=date.asc`).catch(()=>[]),
+      sb(`/bookings?master_id=eq.${masterId}&date=gte.${todayStr}&date=lte.${futureStr}&status=neq.cancelled&status=neq.no_show&select=date,start_time`).catch(()=>[])
+    ]);
+    if(!availRows || availRows.length===0){
       document.getElementById('ctawrap').style.display='block';
       setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
       return;
     }
-    // 直接列出實際有開放的日期，客人不用一天一天亂試
+    const bookedSet = new Set((bookingRows||[]).map(b=>b.date+'__'+b.start_time.slice(0,5)));
+    const restSet = REST_BY_MASTER[masterId] || new Set();
+    const availableSlots = []; // [{date,time}]，實際還約得到的組合
+    const closedDatesInRange = []; // 這段期間內的店休日，另外提示
+    for(const row of availRows){
+      if(new Date(row.date+'T00:00:00').getDay()===0) continue; // 週日不算
+      if(isDateClosed(row.date)){ closedDatesInRange.push(row.date); continue; }
+      const candidateTimes = (Array.isArray(row.open_slots) && row.open_slots.length) ? row.open_slots : TIMES;
+      for(const t of candidateTimes){
+        if(bookedSet.has(row.date+'__'+t)) continue;
+        if(restSet.has(t)) continue;
+        availableSlots.push({date: row.date, time: t});
+      }
+    }
+    if(availableSlots.length===0){
+      // 標記開放的日子都被約滿或剛好都遇到店休，等同完全約不到，跳過選日期進申請表單
+      document.getElementById('ctawrap').style.display='block';
+      setTimeout(()=>document.getElementById('ctawrap').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+      return;
+    }
     const hint = document.getElementById('openDatesHint');
     if(hint){
-      const dates = rows.map(r=>{
-        const [,m,d] = r.date.split('-');
-        return `${parseInt(m)}/${parseInt(d)}`;
+      const shown = availableSlots.slice(0,8).map(s=>{
+        const [,m,d] = s.date.split('-');
+        return `${parseInt(m)}/${parseInt(d)} ${s.time}`;
       });
-      hint.textContent = `${MASTERS[key].name}近期開放：${dates.join('、')}`;
+      let hintText = `${MASTERS[key].name}近期可約：${shown.join('、')}`;
+      if(availableSlots.length>8) hintText += '…';
+      if(closedDatesInRange.length>0){
+        const cd = closedDatesInRange.slice(0,3).map(d=>{
+          const [,m,dd]=d.split('-'); return `${parseInt(m)}/${parseInt(dd)}`;
+        });
+        hintText += `\n（${cd.join('、')}${closedDatesInRange.length>3?'…':''}店休暫停預約）`;
+      }
+      hint.textContent = hintText;
+      hint.style.whiteSpace = 'pre-line';
       hint.style.display = 'block';
     }
   } else {
@@ -937,7 +969,7 @@ async function onCustDateChange(){
     return;
   }
   if(new Date(val+'T00:00:00').getDay()===0){
-    toast('週日僅接受電話或現場登記，請直接聯絡師傅預約','err');
+    toast('週日公休，如需服務請於營業時間電話預約（週一至週六 09:30-12:00、14:00-18:00、19:00-21:30）','err');
     document.getElementById('custDateInput').value='';
     return;
   }
@@ -1016,7 +1048,7 @@ function renderSlots(){
     return;
   }
   if(new Date(selD+'T00:00:00').getDay()===0){
-    tgrid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--t2);font-size:13px">週日僅接受電話或現場登記，請直接聯絡師傅預約</div>`;
+    tgrid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--t2);font-size:13px;line-height:1.8">週日公休<br>如需服務請於營業時間電話預約<br><span style="color:var(--text)">週一至週六　09:30-12:00、14:00-18:00、19:00-21:30</span></div>`;
     document.getElementById('ctawrap').style.display='none';
     return;
   }
