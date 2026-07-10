@@ -333,6 +333,15 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
     <input class="fi" id="setup-phone" placeholder="09xxxxxxxx" type="tel" inputmode="numeric" />
   </div>
 
+  <!-- 是否來過本店 -->
+  <div class="fg">
+    <label class="fl">是否來過本店 <span style="color:var(--red)">*</span></label>
+    <div class="chips" id="setup-chips-visited">
+      <button class="chip" onclick="setupPickChip('visited','來過')">來過</button>
+      <button class="chip" onclick="setupPickChip('visited','第一次來')">第一次來</button>
+    </div>
+  </div>
+
   <!-- 年齡 -->
   <div class="fg">
     <label class="fl">年齡 <span style="color:var(--red)">*</span></label>
@@ -720,6 +729,7 @@ async function completeFirstSetup(){
   
   if(!name){toast('請輸入姓名','err');return;}
   if(!phone || !/^09\d{8}$/.test(phone)){toast('請輸入正確手機號碼','err');return;}
+  if(!setupChipVals['visited']){toast('請選擇是否來過本店','err');return;}
   if(!age){toast('請輸入年齡','err');return;}
 
   // Save to localStorage
@@ -729,6 +739,7 @@ async function completeFirstSetup(){
     age: age,
     fracture: setupChipVals['fracture'] || '',
     spine: setupChipVals['spine'] || '',
+    hasVisitedBefore: setupChipVals['visited']==='來過',
     note: '',
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -1259,9 +1270,13 @@ async function doSubmit(){
     let masterId=m?.id;
     let status='tentative';
     let extraBooking=null;
-    // Check if new customer
+    // Check if new customer：優先用首次設定時的明確答案(客人自己講的最準)，
+    // 沒有這筆資料(這個問題上線前就設定過的舊帳號)才退回查customers表比對電話
     let isNewCustomer = false;
-    if(phone){
+    const stored = getStoredCustomerData();
+    if(stored && typeof stored.hasVisitedBefore === 'boolean'){
+      isNewCustomer = !stored.hasVisitedBefore;
+    } else if(phone){
       const existing = await sb(`/customers?phone=eq.${encodeURIComponent(phone)}&select=id&limit=1`).catch(()=>[]);
       isNewCustomer = !existing || existing.length === 0;
     }
@@ -1425,7 +1440,7 @@ async function loadMyBookings(){
       return;
     }
     const phoneFilter=phones.map(p=>encodeURIComponent(p)).join(',');
-    const bookings=await sb(`/bookings?customer_phone=in.(${phoneFilter})&order=date.desc,start_time.desc&limit=50`);
+    const bookings=await sb(`/bookings?customer_phone=in.(${phoneFilter})&order=created_at.desc&limit=10`);
     document.getElementById('mylist').innerHTML=renderBookings(bookings);
 
     // 設定 Realtime 訂閱（只在電話號碼首次確定時建立一次，多支電話取第一支代表訂閱即可）
@@ -1468,55 +1483,88 @@ async function refreshBookingsList(phone){
   }catch(e){}
 }
 
+function categorizeBooking(b){
+  if(b.status==='cancelled') return 'cancelled';
+  if(b.status==='awaiting_customer'){
+    const dl=b.confirm_deadline?new Date(b.confirm_deadline):null;
+    if(dl&&dl.getTime()<Date.now()) return 'cancelled'; // 已逾時視同取消
+    return 'pending';
+  }
+  if(b.status==='confirmed') return 'success';
+  return 'pending'; // tentative(含申請制等待安排)/reschedule_requested/cancellation_requested 都算處理中
+}
+function renderBookingCard(b){
+  const hasSlot=!!(b.date&&b.start_time);
+  const d=hasSlot?new Date(b.date+'T00:00:00+08:00'):null;
+  const timeLabel=hasSlot?b.start_time.slice(0,5):'';
+  let sc=b.status==='confirmed'?'st-ok':b.status==='cancelled'?'st-cancel':'st-pend';
+  let st=b.status==='confirmed'?'✓ 已確認':b.status==='cancelled'?'✗ 已取消':'待確認';
+  let actionBtns='';
+  // ── 待客人二次確認：師傅已排定時段，客人需於 2 小時內確認 ──
+  if(b.status==='awaiting_customer'){
+    const dl=b.confirm_deadline?new Date(b.confirm_deadline):null;
+    const expired=dl&&dl.getTime()<Date.now();
+    if(expired){
+      sc='st-cancel'; st='✗ 已逾時';
+    }else{
+      sc='st-pend'; st='⏰ 待你確認';
+      const mins=dl?Math.max(0,Math.round((dl.getTime()-Date.now())/60000)):null;
+      const cd=mins!=null?(mins>=60?`約 ${Math.floor(mins/60)} 小時 ${mins%60} 分`:`約 ${mins} 分鐘`):'時間';
+      actionBtns=`<div style="margin-top:8px">
+        <button onclick="confirmBookingByCustomer('${b.id}')" style="width:100%;background:var(--cyan);border:none;color:#00171f;border-radius:8px;padding:11px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">✓ 確認這個預約時間</button>
+      </div>
+      <div style="font-size:11px;color:var(--red);margin-top:6px;font-weight:700">⏰ 請於 ${cd}內確認，逾時時段會自動釋出</div>
+      <div style="margin-top:6px">
+        <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${hasSlot?b.start_time.slice(0,5):''}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">不能來，取消</button>
+      </div>`;
+    }
+  }
+  if(b.status==='tentative'&&hasSlot){
+    actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
+      <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
+      <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
+    </div>`;
+  } else if(hasSlot&&b.status==='confirmed'&&new Date(b.date+'T23:59:59')>new Date()){
+    actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
+      <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
+      <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
+    </div>`;
+  }
+  return `<div class="bk" id="bk-${b.id}">
+    <div class="bk-db">${d?`<div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div>`:'<div class="bk-dm">申請中</div>'}</div>
+    <div class="bk-info">
+      ${hasSlot?`<div class="bk-time">${timeLabel}</div>`:'<div style="font-size:13px;color:var(--t2);font-weight:700">申請制・等待師傅安排</div>'}
+      <div class="bk-mst">${MNAME[b.master_id]||''} 老師</div>
+      ${actionBtns}
+    </div>
+    <span class="bk-st ${sc}">${st}</span>
+  </div>`;
+}
 function renderBookings(bookings){
   if(!bookings?.length) return '<div class="empty">目前沒有預約</div>';
-  return bookings.map(b=>{
-    const hasSlot=!!(b.date&&b.start_time);
-    const d=hasSlot?new Date(b.date+'T00:00:00+08:00'):null;
-    const timeLabel=hasSlot?b.start_time.slice(0,5):'（申請制，等待師傅安排）';
-    let sc=b.status==='confirmed'?'st-ok':b.status==='cancelled'?'st-cancel':'st-pend';
-    let st=b.status==='confirmed'?'✓ 已確認':b.status==='cancelled'?'✗ 已取消':'待確認';
-    let actionBtns='';
-    // ── 待客人二次確認：師傅已排定時段，客人需於 2 小時內確認 ──
-    if(b.status==='awaiting_customer'){
-      const dl=b.confirm_deadline?new Date(b.confirm_deadline):null;
-      const expired=dl&&dl.getTime()<Date.now();
-      if(expired){
-        sc='st-cancel'; st='✗ 已逾時';
-      }else{
-        sc='st-pend'; st='⏰ 待你確認';
-        const mins=dl?Math.max(0,Math.round((dl.getTime()-Date.now())/60000)):null;
-        const cd=mins!=null?(mins>=60?`約 ${Math.floor(mins/60)} 小時 ${mins%60} 分`:`約 ${mins} 分鐘`):'時間';
-        actionBtns=`<div style="margin-top:8px">
-          <button onclick="confirmBookingByCustomer('${b.id}')" style="width:100%;background:var(--cyan);border:none;color:#00171f;border-radius:8px;padding:11px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">✓ 確認這個預約時間</button>
-        </div>
-        <div style="font-size:11px;color:var(--red);margin-top:6px;font-weight:700">⏰ 請於 ${cd}內確認，逾時時段會自動釋出</div>
-        <div style="margin-top:6px">
-          <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${hasSlot?b.start_time.slice(0,5):''}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">不能來，取消</button>
-        </div>`;
-      }
-    }
-    if(b.status==='tentative'&&hasSlot){
-      actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
-        <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
-        <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
-      </div>`;
-    } else if(hasSlot&&b.status==='confirmed'&&new Date(b.date+'T23:59:59')>new Date()){
-      actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
-        <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
-        <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
-      </div>`;
-    }
-    return `<div class="bk" id="bk-${b.id}">
-      <div class="bk-db">${d?`<div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div>`:'<div class="bk-dm">申請中</div>'}</div>
-      <div class="bk-info">
-        <div class="bk-time">${timeLabel}</div>
-        <div class="bk-mst">${MNAME[b.master_id]||''} 老師</div>
-        ${actionBtns}
-      </div>
-      <span class="bk-st ${sc}">${st}</span>
-    </div>`;
-  }).join('');
+  const groups={pending:[],success:[],cancelled:[]};
+  bookings.forEach(b=>groups[categorizeBooking(b)].push(b));
+  // 待確認/已確認：時間近的排前面（沒有時段的申請制排最後，畢竟還沒有確切時間可比較）；
+  // 已取消：最近取消的排前面（歷史紀錄性質，跟前兩組排序方向相反）
+  const byTimeAsc=(a,b)=>{
+    if(!a.date&&!b.date) return 0;
+    if(!a.date) return 1;
+    if(!b.date) return -1;
+    return (a.date+a.start_time).localeCompare(b.date+b.start_time);
+  };
+  const byTimeDesc=(a,b)=>-byTimeAsc(a,b);
+  groups.pending.sort(byTimeAsc);
+  groups.success.sort(byTimeAsc);
+  groups.cancelled.sort(byTimeDesc);
+  const sections=[
+    ['pending','待確認 / 處理中'],
+    ['success','已確認'],
+    ['cancelled','已取消']
+  ];
+  return sections.filter(([key])=>groups[key].length>0).map(([key,label])=>
+    `<div style="font-size:12px;font-weight:700;color:var(--t2);margin:14px 0 8px;letter-spacing:1px">${label}</div>`
+    + groups[key].map(renderBookingCard).join('')
+  ).join('');
 }
 
 function toast(msg,type){
