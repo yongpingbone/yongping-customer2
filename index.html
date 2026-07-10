@@ -739,9 +739,10 @@ async function completeFirstSetup(){
 // ── Init ─────────────────────────────
 async function init(){
   try{
-    await liff.init({liffId:LIFF_ID});
+    const timeout = ms => new Promise((_, rej) => setTimeout(() => rej(new Error('liff.init 逾時')), ms));
+    await Promise.race([liff.init({liffId:LIFF_ID}), timeout(8000)]);
     if(!liff.isLoggedIn()){liff.login();return;}
-    profile = await liff.getProfile();
+    profile = await Promise.race([liff.getProfile(), timeout(8000)]);
     document.getElementById('av').src = profile.pictureUrl||'';
     document.getElementById('uname').textContent = profile.displayName;
 
@@ -764,8 +765,9 @@ async function init(){
     profile={userId:'dev',displayName:'',pictureUrl:''};
     document.getElementById('uname').textContent='訪客';
   }
-  await loadRestTimes();
-  await loadStoreClosures();
+  const timeout2 = ms => new Promise((_, rej) => setTimeout(() => rej(new Error('逾時')), ms));
+  await Promise.race([loadRestTimes(), timeout2(8000)]).catch(()=>{});
+  await Promise.race([loadStoreClosures(), timeout2(8000)]).catch(()=>{});
   document.getElementById('loader').style.display='none';
   const app=document.getElementById('app');
   app.style.display='flex';
