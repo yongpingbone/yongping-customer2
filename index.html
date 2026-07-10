@@ -51,6 +51,8 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 .t-open{background:rgba(46,217,195,.15);color:var(--cyan)}
 .t-req{background:var(--gdim);color:var(--gold)}
 .t-auto{background:rgba(0,208,156,.15);color:var(--green)}
+.quick-slot-btn{background:var(--cdim);border:1.5px solid var(--cyan);color:var(--cyan);font-size:13px;font-weight:700;padding:7px 12px;border-radius:10px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.quick-slot-btn:active{background:var(--cyan);color:#00171f}
 
 /* Date */
 .drow{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
@@ -919,19 +921,20 @@ async function pickM(key){
     }
     const hint = document.getElementById('openDatesHint');
     if(hint){
-      const shown = availableSlots.slice(0,8).map(s=>{
+      const shown = availableSlots.slice(0,8);
+      const btnsHtml = shown.map(s=>{
         const [,m,d] = s.date.split('-');
-        return `${parseInt(m)}/${parseInt(d)} ${s.time}`;
-      });
-      let hintText = `${MASTERS[key].name}近期可約：${shown.join('、')}`;
-      if(availableSlots.length>8) hintText += '…';
+        return `<button type="button" class="quick-slot-btn" onclick="quickPickSlot('${s.date}','${s.time}')">${parseInt(m)}/${parseInt(d)} ${s.time}</button>`;
+      }).join('');
+      let html = `<div style="margin-bottom:6px">${MASTERS[key].name}近期可約，點選快速預約：</div><div style="display:flex;flex-wrap:wrap;gap:6px">${btnsHtml}</div>`;
+      if(availableSlots.length>8) html += `<div style="margin-top:4px;font-size:11px;opacity:.7">還有更多時段，或自行選擇日期</div>`;
       if(closedDatesInRange.length>0){
         const cd = closedDatesInRange.slice(0,3).map(d=>{
           const [,m,dd]=d.split('-'); return `${parseInt(m)}/${parseInt(dd)}`;
         });
-        hintText += `\n（${cd.join('、')}${closedDatesInRange.length>3?'…':''}店休暫停預約）`;
+        html += `<div style="margin-top:8px;color:var(--t2)">（${cd.join('、')}${closedDatesInRange.length>3?'…':''}店休暫停預約）</div>`;
       }
-      hint.textContent = hintText;
+      hint.innerHTML = html;
       hint.style.whiteSpace = 'pre-line';
       hint.style.display = 'block';
     }
@@ -952,6 +955,19 @@ async function pickM(key){
     prefetch(getTaipeiDateStr(d));
   }
   setTimeout(()=>document.getElementById('sec-date').scrollIntoView({behavior:'smooth',block:'nearest'}),100);
+}
+
+// 提示區塊的快速預約按鈕：點了直接設定日期、跑一次驗證、選定時段，
+// 一步到位跳到「選好了，填資料」，不用再手動選一次日期
+async function quickPickSlot(dateStr, timeStr){
+  const dInput = document.getElementById('custDateInput');
+  dInput.value = dateStr;
+  await onCustDateChange();
+  // onCustDateChange 內部已經驗證過這天可以約(不然這個組合當初也不會出現在提示裡)，
+  // 這裡再次確認 selD 有正確設定才繼續，避免極端情況(例如恰好在這幾秒內被別人約走)硬選一個不存在的時段
+  if(selD === dateStr){
+    pickTime(timeStr);
+  }
 }
 
 async function onCustDateChange(){
