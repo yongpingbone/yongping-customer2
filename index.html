@@ -848,6 +848,8 @@ function pickMode(mode){
   document.getElementById('sec-date').style.display='none';
   document.getElementById('sec-time').style.display='none';
   document.getElementById('ctawrap').style.display='none';
+  const hint = document.getElementById('openDatesHint');
+  if(hint) hint.style.display = 'none';
 
   if(mode === 'same'){
     document.getElementById('sec-master-same').style.display='block';
@@ -1327,6 +1329,8 @@ function reset(){
   document.getElementById('sec-date').style.display='none';
   document.getElementById('sec-time').style.display='none';
   document.getElementById('ctawrap').style.display='none';
+  const hint = document.getElementById('openDatesHint');
+  if(hint) hint.style.display = 'none';
   document.getElementById('pg-book').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
@@ -1337,6 +1341,8 @@ function goBack(to){
     document.getElementById('sec-date').style.display='none';
     document.getElementById('sec-time').style.display='none';
     document.getElementById('ctawrap').style.display='none';
+    const hint = document.getElementById('openDatesHint');
+    if(hint) hint.style.display = 'none';
     document.getElementById('pg-book').scrollIntoView({behavior:'smooth',block:'start'});
   } else if(to==='date'){
     selD=null;selT=null;
