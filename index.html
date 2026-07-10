@@ -1531,8 +1531,14 @@ function renderBookingCard(b){
     </div>`;
   }
   const custName=(b.customer_name||'').trim();
+  const cd=(!d&&b.created_at)?new Date(b.created_at):null;
+  const dateBoxHtml=d
+    ?`<div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div>`
+    :cd
+      ?`<div class="bk-dm" style="font-size:9px">${cd.getMonth()+1}/${cd.getDate()}申請</div>`
+      :'<div class="bk-dm">申請中</div>';
   return `<div class="bk" id="bk-${b.id}">
-    <div class="bk-db">${d?`<div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div>`:'<div class="bk-dm">申請中</div>'}</div>
+    <div class="bk-db">${dateBoxHtml}</div>
     <div class="bk-info">
       ${hasSlot?`<div class="bk-time">${timeLabel}</div>`:'<div style="font-size:13px;color:var(--t2);font-weight:700">申請制・等待師傅安排</div>'}
       <div class="bk-mst">${MNAME[b.master_id]||''} 老師${custName?`　<span style="color:var(--t2)">${custName}</span>`:''}</div>
