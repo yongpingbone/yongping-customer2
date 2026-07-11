@@ -1020,6 +1020,7 @@ async function onCustDateChange(){
   if(new Date(val+'T00:00:00').getDay()===0){
     toast('週日公休，如需服務請於營業時間電話預約（週一至週六 09:30-12:00、14:00-18:00、19:00-21:30）','err');
     document.getElementById('custDateInput').value='';
+    document.getElementById('sec-time').style.display='none';
     return;
   }
   await prefetch(val); // 順便把這天的可約狀態、既有預約都查好（含 availCache）
@@ -1037,6 +1038,7 @@ async function onCustDateChange(){
     }
     toast('這天這位師傅還沒開放線上預約，請選別的日期或改用電話/現場登記','err');
     document.getElementById('custDateInput').value='';
+    document.getElementById('sec-time').style.display='none';
     return;
   }
   selD=val; selT=null;
