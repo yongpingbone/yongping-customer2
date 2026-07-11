@@ -1599,7 +1599,7 @@ function renderBookingCard(b){
   const dateBoxHtml=d
     ?`<div class="bk-dm">${d.getMonth()+1}月</div><div class="bk-dd">${d.getDate()}</div><div class="bk-dw">週${WK[d.getDay()]}</div>`
     :cd
-      ?`<div class="bk-dm" style="font-size:9px">${cd.getMonth()+1}/${cd.getDate()}申請</div>`
+      ?`<div class="bk-dm">${cd.getMonth()+1}月</div><div class="bk-dd">${cd.getDate()}</div><div class="bk-dw" style="color:var(--red)">申請</div>`
       :'<div class="bk-dm">申請中</div>';
   return `<div class="bk" id="bk-${b.id}">
     <div class="bk-db">${dateBoxHtml}</div>
