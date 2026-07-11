@@ -1542,6 +1542,11 @@ async function refreshBookingsList(phone){
   }catch(e){}
 }
 
+// 申請制(等待師傅安排時段)的24小時期限，以送出申請的時間(created_at)為起點算
+function requestArrangeDeadline(b){
+  if(!b.created_at) return null;
+  return new Date(new Date(b.created_at).getTime()+24*60*60*1000);
+}
 function categorizeBooking(b){
   if(b.status==='cancelled') return 'cancelled';
   if(b.status==='awaiting_customer'){
@@ -1549,8 +1554,14 @@ function categorizeBooking(b){
     if(dl&&dl.getTime()<Date.now()) return 'cancelled'; // 已逾時視同取消
     return 'pending';
   }
+  if(b.status==='tentative'&&!(b.date&&b.start_time)){
+    // 申請制、師傅還沒安排時段：24小時內沒安排視同過期，歸類到已取消
+    const dl=requestArrangeDeadline(b);
+    if(dl&&dl.getTime()<Date.now()) return 'cancelled';
+    return 'pending';
+  }
   if(b.status==='confirmed') return 'success';
-  return 'pending'; // tentative(含申請制等待安排)/reschedule_requested/cancellation_requested 都算處理中
+  return 'pending'; // tentative(已有時段)/reschedule_requested/cancellation_requested 都算處理中
 }
 function renderBookingCard(b){
   const hasSlot=!!(b.date&&b.start_time);
@@ -1558,6 +1569,11 @@ function renderBookingCard(b){
   const timeLabel=hasSlot?b.start_time.slice(0,5):'';
   let sc=b.status==='confirmed'?'st-ok':b.status==='cancelled'?'st-cancel':'st-pend';
   let st=b.status==='confirmed'?'✓ 已確認':b.status==='cancelled'?'✗ 已取消':'待確認';
+  // 申請制(還沒被安排時段)超過24小時：狀態徽章也要跟著顯示過期，不要跟「待確認」混在一起
+  if(b.status==='tentative'&&!hasSlot){
+    const reqDl=requestArrangeDeadline(b);
+    if(reqDl&&reqDl.getTime()<Date.now()){ sc='st-cancel'; st='✗ 已過期'; }
+  }
   let actionBtns='';
   // ── 待客人二次確認：師傅已排定時段，客人需於 2 小時內確認 ──
   if(b.status==='awaiting_customer'){
@@ -1604,7 +1620,17 @@ function renderBookingCard(b){
   return `<div class="bk" id="bk-${b.id}">
     <div class="bk-db">${dateBoxHtml}</div>
     <div class="bk-info">
-      ${hasSlot?`<div class="bk-time">${timeLabel}</div>`:'<div style="font-size:13px;color:var(--t2);font-weight:700">申請制・等待師傅安排</div>'}
+      ${hasSlot?`<div class="bk-time">${timeLabel}</div>`:(()=>{
+        const dl=requestArrangeDeadline(b);
+        const expired=dl&&dl.getTime()<Date.now();
+        if(expired) return '<div style="font-size:13px;color:var(--red);font-weight:700">✗ 預約過期</div>';
+        if(dl){
+          const mins=Math.max(0,Math.round((dl.getTime()-Date.now())/60000));
+          const cdText=mins>=60?`還剩 ${Math.floor(mins/60)} 小時 ${mins%60} 分`:`還剩 ${mins} 分鐘`;
+          return `<div style="font-size:13px;color:var(--t2);font-weight:700">⏰ 等待安排中</div><div style="font-size:11px;color:var(--red);margin-top:2px;font-weight:700">${cdText}</div>`;
+        }
+        return '<div style="font-size:13px;color:var(--t2);font-weight:700">⏰ 等待安排中</div>';
+      })()}
       <div class="bk-mst">${MNAME[b.master_id]||''} 老師${custName?`　<span style="color:var(--t2)">${custName}</span>`:''}</div>
       ${actionBtns}
     </div>
