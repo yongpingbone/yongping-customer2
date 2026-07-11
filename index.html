@@ -537,6 +537,17 @@ const MASTERS = {
   zhi:    {id:'e9021367-64c7-476d-a079-2e8e2475988e', name:'魏老師',   type:'request'},
   auto:   {id:null, name:'不指定', type:'auto'},
 };
+// master_id 反查回 MASTERS 的 key（重新預約時 pickM 要用 key，不是 id）
+const MASTER_KEY_BY_ID = Object.fromEntries(
+  Object.entries(MASTERS).filter(([k,v])=>v.id).map(([k,v])=>[v.id,k])
+);
+// 「重新預約」：切回預約分頁，直接幫客人選好同一位師傅，跳到選日期那步
+function rebookWithMaster(masterId){
+  const key = MASTER_KEY_BY_ID[masterId];
+  if(!key) return;
+  goPage('book');
+  setTimeout(()=>pickM(key), 50); // 等分頁切換的畫面渲染完再選師傅，避免元素還沒出現
+}
 
 // ── 師傅休息時段（從 master_rest_times 讀取，客人預約時擋掉）──
 // REST_BY_MASTER: { master_id: Set(times) }
@@ -1576,6 +1587,11 @@ function renderBookingCard(b){
     actionBtns=`<div style="margin-top:6px;display:flex;gap:5px">
       <button onclick="modifyBooking('${b.id}','${b.master_id}','${b.date}')" style="background:none;border:1px solid var(--border);color:var(--t2);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">修改</button>
       <button onclick="requestCancellation('${b.id}','${b.master_id}','${b.date}','${b.start_time.slice(0,5)}')" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit">取消</button>
+    </div>`;
+  } else if(b.master_id && (b.status==='cancelled' || (b.status==='confirmed'&&hasSlot&&new Date(b.date+'T23:59:59')<=new Date()))){
+    // 已經發生過的預約(已取消、或確認且日期已過)：提供「重新預約」快速回到預約流程，同一位師傅
+    actionBtns=`<div style="margin-top:8px">
+      <button onclick="rebookWithMaster('${b.master_id}')" style="width:100%;background:#e94560;border:none;color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit">重新預約</button>
     </div>`;
   }
   const custName=(b.customer_name||'').trim();
