@@ -6,14 +6,15 @@
 <title>永平整復保健 線上預約</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@500;700&display=swap">
 <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
-  --bg:#0a0a14;--bg2:#11111e;--bg3:#181828;--border:#252538;
-  --text:#eeeef5;--t2:#777799;--cyan:#2ed9c3;--cdim:rgba(46,217,195,.1);
-  --gold:#ffb300;--gdim:rgba(255,179,0,.1);--red:#ff4444;--green:#00d09c;
+  --bg:#faf3ec;--bg2:#fffcf8;--bg3:#f2e6d8;--border:#e5d5c0;
+  --text:#4a3b32;--t2:#7d6a5a;--cyan:#b8574a;--cdim:rgba(184,87,74,.1);
+  --gold:#b8703f;--gdim:rgba(184,112,63,.12);--red:#c25b4f;--green:#5c8a6d;
+  --on-accent:#fffcf8;
   --safe:env(safe-area-inset-bottom,0px)
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -43,16 +44,16 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 .mrow{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
 .mrow::-webkit-scrollbar{display:none}
 .mc{display:flex;flex-direction:column;align-items:center;min-width:70px;padding:12px 8px 10px;background:var(--bg2);border:1.5px solid var(--border);border-radius:14px;cursor:pointer;transition:.15s;flex-shrink:0;user-select:none;position:relative}
-.mc-last{position:absolute;top:4px;right:4px;background:var(--cyan);color:#00171f;font-size:8px;font-weight:900;padding:1.5px 5px;border-radius:6px;white-space:nowrap;pointer-events:none}
+.mc-last{position:absolute;top:4px;right:4px;background:var(--cyan);color:var(--on-accent);font-size:8px;font-weight:900;padding:1.5px 5px;border-radius:6px;white-space:nowrap;pointer-events:none}
 .mc.on{border-color:var(--cyan);background:var(--cdim)}
 .mc.on-g{border-color:var(--gold);background:var(--gdim)}
 .mc-nm{font-size:16px;font-weight:900;margin-bottom:4px}
 .mc-tag{font-size:10px;padding:2px 6px;border-radius:8px;white-space:nowrap}
-.t-open{background:rgba(46,217,195,.15);color:var(--cyan)}
+.t-open{background:rgba(184,87,74,.15);color:var(--cyan)}
 .t-req{background:var(--gdim);color:var(--gold)}
-.t-auto{background:rgba(0,208,156,.15);color:var(--green)}
+.t-auto{background:rgba(92,138,109,.15);color:var(--green)}
 .quick-slot-btn{background:var(--cdim);border:1.5px solid var(--cyan);color:var(--cyan);font-size:13px;font-weight:700;padding:7px 12px;border-radius:10px;cursor:pointer;font-family:inherit;white-space:nowrap}
-.quick-slot-btn:active{background:var(--cyan);color:#00171f}
+.quick-slot-btn:active{background:var(--cyan);color:var(--on-accent)}
 
 /* Date */
 .drow{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
@@ -69,7 +70,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 .ts{padding:12px 4px;border-radius:10px;text-align:center;font-size:13px;font-weight:500;background:var(--bg2);border:1.5px solid var(--border);cursor:pointer;transition:.1s;user-select:none}
 .ts:active{transform:scale(.93)}
 .ts.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan);font-weight:700}
-.ts.full{background:rgba(255,68,68,.06);border-color:rgba(255,68,68,.15);color:rgba(255,100,100,.5);cursor:not-allowed;font-size:11px}
+.ts.full{background:rgba(194,91,79,.06);border-color:rgba(194,91,79,.15);color:rgba(210,130,120,.5);cursor:not-allowed;font-size:11px}
 .ts.sk{background:var(--bg3);border-color:var(--bg3);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:.3}50%{opacity:.8}}
 
@@ -106,7 +107,7 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 
 /* Info box */
 .info-box{background:var(--bg3);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--t2);line-height:1.7;border-left:3px solid var(--gold)}
-.warning-box{background:rgba(255,100,100,.08);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--red);line-height:1.7;border-left:3px solid var(--red)}
+.warning-box{background:rgba(210,130,120,.08);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--red);line-height:1.7;border-left:3px solid var(--red)}
 
 /* Buttons row */
 .btn-row{display:flex;gap:10px;margin-top:6px}
@@ -125,9 +126,9 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 .bk-time{font-size:20px;font-weight:900;color:var(--cyan);line-height:1.2}
 .bk-mst{font-size:13px;color:var(--t2);margin-top:2px}
 .bk-st{font-size:11px;padding:3px 9px;border-radius:10px;flex-shrink:0}
-.st-ok{background:rgba(0,208,156,.15);color:var(--green)}
+.st-ok{background:rgba(92,138,109,.15);color:var(--green)}
 .st-pend{background:var(--gdim);color:var(--gold)}
-.st-cancel{background:rgba(255,68,68,.15);color:var(--red)}
+.st-cancel{background:rgba(194,91,79,.15);color:var(--red)}
 
 /* Toast */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px 18px;font-size:14px;z-index:999;opacity:0;transition:.2s;pointer-events:none;white-space:nowrap}
@@ -1588,7 +1589,7 @@ function renderBookingCard(b){
       const mins=dl?Math.max(0,Math.round((dl.getTime()-Date.now())/60000)):null;
       const cd=mins!=null?(mins>=60?`約 ${Math.floor(mins/60)} 小時 ${mins%60} 分`:`約 ${mins} 分鐘`):'時間';
       actionBtns=`<div style="margin-top:8px">
-        <button onclick="confirmBookingByCustomer('${b.id}')" style="width:100%;background:var(--cyan);border:none;color:#00171f;border-radius:8px;padding:11px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">✓ 確認這個預約時間</button>
+        <button onclick="confirmBookingByCustomer('${b.id}')" style="width:100%;background:var(--cyan);border:none;color:var(--on-accent);border-radius:8px;padding:11px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">✓ 確認這個預約時間</button>
       </div>
       <div style="font-size:11px;color:var(--red);margin-top:6px;font-weight:700">⏰ 請於 ${cd}內確認，逾時時段會自動釋出</div>
       <div style="margin-top:6px">
@@ -1609,7 +1610,7 @@ function renderBookingCard(b){
   } else if(b.master_id && (b.status==='cancelled' || (b.status==='confirmed'&&hasSlot&&new Date(b.date+'T23:59:59')<=new Date()))){
     // 已經發生過的預約(已取消、或確認且日期已過)：提供「重新預約」快速回到預約流程，同一位師傅
     actionBtns=`<div style="margin-top:8px">
-      <button onclick="rebookWithMaster('${b.master_id}')" style="width:100%;background:#e94560;border:none;color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit">重新預約</button>
+      <button onclick="rebookWithMaster('${b.master_id}')" style="width:100%;background:var(--cyan);border:none;color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit">重新預約</button>
     </div>`;
   }
   const custName=(b.customer_name||'').trim();
