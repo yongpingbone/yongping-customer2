@@ -11,10 +11,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
-  --bg:#faf3ec;--bg2:#fffcf8;--bg3:#f2e6d8;--border:#e5d5c0;
-  --text:#4a3b32;--t2:#7d6a5a;--cyan:#b8574a;--cdim:rgba(184,87,74,.1);
-  --gold:#b8703f;--gdim:rgba(184,112,63,.12);--red:#c25b4f;--green:#5c8a6d;
-  --on-accent:#fffcf8;
+  /* 2026-07-13 參考 It's Saturday(its-saturday.com) 水泥香氛蠟燭品牌配色，
+     跟師傅端亮色主題同一套更新——水泥灰米色底，粉塵藕/酪梨綠/落日餘暉
+     這幾個品牌實際產品色號當強調色。 */
+  --bg:#ece4d6;--bg2:#f8f3e9;--bg3:#ded1bb;--border:#d9c9ac;
+  --text:#42392f;--t2:#7d6f5c;--cyan:#bd7f8a;--cdim:rgba(189,127,138,.12);
+  --gold:#b06d4a;--gdim:rgba(176,109,74,.12);--red:#b05a4a;--green:#8a9678;
+  --on-accent:#f8f3e9;
   --safe:env(safe-area-inset-bottom,0px)
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -49,9 +52,9 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 .mc.on-g{border-color:var(--gold);background:var(--gdim)}
 .mc-nm{font-size:16px;font-weight:900;margin-bottom:4px}
 .mc-tag{font-size:10px;padding:2px 6px;border-radius:8px;white-space:nowrap}
-.t-open{background:rgba(184,87,74,.15);color:var(--cyan)}
+.t-open{background:rgba(189,127,138,.15);color:var(--cyan)}
 .t-req{background:var(--gdim);color:var(--gold)}
-.t-auto{background:rgba(92,138,109,.15);color:var(--green)}
+.t-auto{background:rgba(138,150,120,.15);color:var(--green)}
 .quick-slot-btn{background:var(--cdim);border:1.5px solid var(--cyan);color:var(--cyan);font-size:13px;font-weight:700;padding:7px 12px;border-radius:10px;cursor:pointer;font-family:inherit;white-space:nowrap}
 .quick-slot-btn:active{background:var(--cyan);color:var(--on-accent)}
 
@@ -70,7 +73,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-seri
 .ts{padding:12px 4px;border-radius:10px;text-align:center;font-size:13px;font-weight:500;background:var(--bg2);border:1.5px solid var(--border);cursor:pointer;transition:.1s;user-select:none}
 .ts:active{transform:scale(.93)}
 .ts.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan);font-weight:700}
-.ts.full{background:rgba(194,91,79,.06);border-color:rgba(194,91,79,.15);color:rgba(210,130,120,.5);cursor:not-allowed;font-size:11px}
+.ts.full{background:rgba(176,90,74,.06);border-color:rgba(176,90,74,.15);color:rgba(196,130,120,.5);cursor:not-allowed;font-size:11px}
 .ts.sk{background:var(--bg3);border-color:var(--bg3);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:.3}50%{opacity:.8}}
 
@@ -107,7 +110,7 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 
 /* Info box */
 .info-box{background:var(--bg3);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--t2);line-height:1.7;border-left:3px solid var(--gold)}
-.warning-box{background:rgba(210,130,120,.08);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--red);line-height:1.7;border-left:3px solid var(--red)}
+.warning-box{background:rgba(196,130,120,.08);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--red);line-height:1.7;border-left:3px solid var(--red)}
 
 /* Buttons row */
 .btn-row{display:flex;gap:10px;margin-top:6px}
@@ -126,9 +129,9 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 .bk-time{font-size:20px;font-weight:900;color:var(--cyan);line-height:1.2}
 .bk-mst{font-size:13px;color:var(--t2);margin-top:2px}
 .bk-st{font-size:11px;padding:3px 9px;border-radius:10px;flex-shrink:0}
-.st-ok{background:rgba(92,138,109,.15);color:var(--green)}
+.st-ok{background:rgba(138,150,120,.15);color:var(--green)}
 .st-pend{background:var(--gdim);color:var(--gold)}
-.st-cancel{background:rgba(194,91,79,.15);color:var(--red)}
+.st-cancel{background:rgba(176,90,74,.15);color:var(--red)}
 
 /* Toast */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px 18px;font-size:14px;z-index:999;opacity:0;transition:.2s;pointer-events:none;white-space:nowrap}
