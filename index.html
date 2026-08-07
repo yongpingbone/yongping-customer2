@@ -102,7 +102,7 @@ body{background:var(--color-outer-bg);color:var(--color-text-primary);font-famil
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);row-gap:2px}
 .cal-cell{aspect-ratio:1;min-height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
 .cal-cell-inner{width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:13px;color:var(--color-text-primary);border-radius:3px;transition:background var(--ease),color var(--ease)}
-.cal-cell.empty{cursor:default}
+.cal-cell-blank{cursor:default}
 .cal-cell.disabled .cal-cell-inner{color:var(--color-disabled-text);cursor:not-allowed}
 .cal-cell.disabled{cursor:not-allowed}
 .cal-cell.today .cal-cell-inner{border:1px solid var(--color-accent-soft)}
@@ -1111,7 +1111,7 @@ async function renderCalendar(){
   const wkHtml=wkLabels.map((w,i)=>`<div class="cal-wk-cell${(i===0||i===6)?' wknd':''}">${w}</div>`).join('');
 
   let cellsHtml='';
-  for(let i=0;i<startWeekday;i++) cellsHtml+='<div class="cal-cell empty"></div>';
+  for(let i=0;i<startWeekday;i++) cellsHtml+='<div class="cal-cell cal-cell-blank"></div>';
   for(let d=1; d<=daysInMonth; d++){
     const dateObj=new Date(calYear,calMonth,d);
     const dateStr=getTaipeiDateStr(dateObj);
