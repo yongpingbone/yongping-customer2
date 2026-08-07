@@ -394,8 +394,8 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 
   <!-- 姓名 -->
   <div class="fg">
-    <label class="fl">姓名（全名或姓氏皆可） <span class="req">*</span></label>
-    <input class="fi" id="setup-name" placeholder="請輸入姓名" autocomplete="off" />
+    <label class="fl">姓名（請留全名） <span class="req">*</span></label>
+    <input class="fi" id="setup-name" placeholder="請輸入您的全名" autocomplete="off" />
   </div>
 
   <!-- 電話 -->
@@ -494,8 +494,8 @@ textarea.fi{resize:none;min-height:80px;line-height:1.5}
 
   <!-- 姓名 -->
   <div class="fg">
-    <label class="fl">姓名（全名或姓氏皆可） <span class="req">*</span></label>
-    <input class="fi" id="f-name" placeholder="請輸入姓名" autocomplete="off" />
+    <label class="fl">姓名（請留全名） <span class="req">*</span></label>
+    <input class="fi" id="f-name" placeholder="請輸入您的全名" autocomplete="off" />
   </div>
 
   <!-- 電話 -->
@@ -816,6 +816,7 @@ async function completeFirstSetup(){
   const age = document.getElementById('setup-age').value.trim();
   
   if(!name){toast('請輸入姓名','err');return;}
+  if(name.length<2){toast('請留下全名（至少2個字）','err');return;}
   if(!phone || !/^09\d{8}$/.test(phone)){toast('請輸入正確手機號碼','err');return;}
   if(!setupChipVals['visited']){toast('請選擇是否來過本店','err');return;}
   if(!age){toast('請輸入年齡','err');return;}
@@ -1404,6 +1405,7 @@ async function doSubmit(){
   const isReq=m?.type==='request' && !(selD&&selT);
 
   if(!name){toast('請輸入姓名','err');return;}
+  if(name.length<2){toast('請留下全名（至少2個字）','err');return;}
   if(!phone||!/^09\d{8}$/.test(phone)){toast('請輸入正確手機號碼','err');return;}
   if(!age){toast('請輸入年齡','err');return;}
   if(isReq&&!weekday&&!weekend){toast('請填寫至少一個希望時段','err');return;}
